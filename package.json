@@ -1,0 +1,19 @@
+{
+  "name": "lambda-genbot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./app.js",
+  "description": "Uses generative AI to create image based on given search prompt",
+  "repository": "https://github.com/caseconsulting/lambda-genbot",
+  "author": "CASE",
+  "scripts": {
+    "build": "sam build -t template.yaml",
+    "deploy": "npm run build && sam deploy --template-file template.yaml --region us-east-1 --capabilities CAPABILITY_IAM --s3-prefix lambda-genbot --s3-bucket case-consulting-mgmt-sam-deployments --stack-name lambda-genbot --profile mgmt",
+    "local": "npm run build && sam local invoke GenBotFunction -e event.json --profile mgmt"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.738.0",
+    "@aws-sdk/util-base64": "^3.310.0"
+  }
+}
