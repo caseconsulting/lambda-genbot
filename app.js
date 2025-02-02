@@ -55,7 +55,7 @@ export const invokeModel = async (prompt, modelId = 'amazon.nova-canvas-v1:0') =
 
     console.log(`Successfully generated image with Amazon Nova Canvas model ${modelId}`);
     console.log(`Image generated successfully. Image size: ${imageBuffer.length} bytes`);
-    return imageBuffer;
+    return base64Image;
   } catch (error) {
     throw error;
   }
@@ -85,11 +85,12 @@ export const handler = async (event, context) => {
 
   if (companyId == process.env.companyId) {
     try {
-      const imageBuffer = await invokeModel(command);
+      const base64Image = await invokeModel(command);
       response = {
         statusCode: 200,
-        contentType: 'image/jpeg',
-        body: imageBuffer
+        contentType: 'image/png',
+        isBase64Encoded: true,
+        body: base64Image
       };
     } catch (error) {
       console.error('Error generating image:', error);
