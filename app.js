@@ -25,7 +25,7 @@ export const invokeModel = async (prompt, modelId = 'amazon.nova-canvas-v1:0') =
   try {
     // Prepare the payload
     console.log(`Preparing payload for text prompt: ${prompt}`);
-    const seed = Math.random() * MAX_SEED; // default is 12
+    const seed = Math.floor(Math.random() * MAX_SEED); // default is 12
     const payload = {
       taskType: 'TEXT_IMAGE',
       textToImageParams: {
