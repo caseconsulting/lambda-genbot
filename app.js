@@ -112,8 +112,13 @@ export const saveImageToBucket = async (imageBuffer, requestId) => {
 
 /**
  * Uses generative AI to create image based on given search prompt.
- * Invokes Amazon Bedrock to use Amazon Nova Canvas image generation model.
+ * Saves image to S3 bucket.
+ * Generates presigned URL, which is valid for seven days, to get object from bucket.
+ * Returns HTML img tag that references presigned URL.
+ *
  * @see {@link https://docs.aws.amazon.com/nova/latest/userguide/image-generation.html}
+ * @see {@link https://community.aws/content/2rc9I0eNkAe22YwlNAkPuD2cHJe/harness-the-power-of-nova-canvas-for-creative-content-generation}
+ * @see {@link https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html}
  *
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
  * @param {Object} event - API Gateway Lambda Proxy Input
