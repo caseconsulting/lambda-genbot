@@ -1,5 +1,5 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import { fromBase64 } from '@aws-sdk/util-base64';
+import { fromBase64 } from '@smithy/util-base64';
 
 // Create Amazon Bedrock Runtime client
 const REGION = 'us-east-1';
@@ -24,8 +24,8 @@ export const invokeModel = async (prompt, modelId = 'amazon.nova-canvas-v1:0') =
       },
       imageGenerationConfig: {
         numberOfImages: 1, // default is 1
-        height: 512, // default is 1024
-        width: 512, // default is 1024
+        height: 320, // default is 1024. Minimum is 320.
+        width: 320, // default is 1024. Minimum is 320.
         quality: 'standard', // default is 'standard'
         cfgScale: 8.0, // default is 6.5
         seed: 42 // default is 12
@@ -55,7 +55,7 @@ export const invokeModel = async (prompt, modelId = 'amazon.nova-canvas-v1:0') =
 
     console.log(`Successfully generated image with Amazon Nova Canvas model ${modelId}`);
     console.log(`Image generated successfully. Image size: ${imageBuffer.length} bytes`);
-    return base64Image;
+    return imageBuffer;
   } catch (error) {
     throw error;
   }
@@ -85,10 +85,11 @@ export const handler = async (event, context) => {
 
   if (companyId == process.env.companyId) {
     try {
-      const base64Image = await invokeModel(command);
+      const imageBuffer = await invokeModel(command);
       response = {
         statusCode: 200,
-        body: base64Image
+        contentType: 'image/jpeg',
+        body: imageBuffer
       };
     } catch (error) {
       console.error('Error generating image:', error);
@@ -98,7 +99,7 @@ export const handler = async (event, context) => {
       };
     }
   } else {
-    console.log('Access denied');
+    console.log(`Access denied, invalid company ID provided: ${companyId}`);
     response = {
       statusCode: 403,
       body: 'Access Denied'

@@ -11,7 +11,7 @@ Globals:
     Name: genbot
     EndpointConfiguration: REGIONAL
     BinaryMediaTypes:
-      - application/octet-stream
+      - image/jpeg
   Function:
     Runtime: nodejs22.x
     Timeout: 30
