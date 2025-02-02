@@ -91,7 +91,7 @@ export const saveImageToBucket = async (imageBuffer, requestId) => {
       ContentType: 'image/png'
     });
     const response = await s3Client.send(putCommand);
-    console.log(response);
+    console.log(`Saved ${imageFileName} image to ${BUCKET_NAME} bucket`);
 
     // Return presigned URL to get image file from bucket
     const getCommand = new GetObjectCommand({
@@ -137,9 +137,10 @@ export const handler = async (event, context) => {
     try {
       const imageBuffer = await invokeModel(command);
       const url = await saveImageToBucket(imageBuffer, requestId);
+      const html = `<img src="${url}" alt="${command}" width="${IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX}" height="${IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX}"/>`;
       response = {
         statusCode: 200,
-        body: url
+        body: html
       };
     } catch (error) {
       console.error('Error generating image:', error);
