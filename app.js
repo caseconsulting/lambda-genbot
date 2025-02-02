@@ -44,9 +44,9 @@ export const invokeModel = async (prompt, modelId = 'amazon.nova-canvas-v1:0') =
     };
 
     // Invoke the model with the payload and wait for the response
-    console.log(`Generating image with Amazon Nova Canvas model ${modelId}`);
+    console.log(`Generating image with Bedrock model ${modelId}`);
     const params = {
-      modelId: modelId,
+      modelId,
       accept: 'application/json',
       contentType: 'application/json',
       body: JSON.stringify(payload)

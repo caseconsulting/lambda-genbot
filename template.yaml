@@ -48,13 +48,13 @@ Resources:
       Description: Uses generative AI to create image based on given search prompt
       Policies:
         - Statement:
-            - Sid: AllowBedrockModelInvoke
+            - Sid: InvokeFoundationModel
               Effect: Allow
               Action:
                 - bedrock:InvokeModel
-              Resource: arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-canvas-v1:0
+              Resource: !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-canvas-v1:0
         - Statement:
-            - Sid: AllowBucketObjectAccess
+            - Sid: AllowImageBucketObjectAccess
               Effect: Allow
               Action:
                 - s3:GetObject
