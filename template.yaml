@@ -25,8 +25,22 @@ Globals:
         companyId: '{{resolve:ssm:/Basecamp/CompanyID:1}}'
 
 Resources:
+  GenBotImagesBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: case-consulting-mgmt-genbot-images
+      LifecycleConfiguration:
+        Rules:
+          - Id: Remove old images
+            ExpirationInDays: 8
+            Status: Enabled
+      Tags:
+        - Key: Application
+          Value: bots
   GenBotFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    DependsOn:
+      - GenBotImagesBucket
     Properties:
       FunctionName: genbot
       CodeUri: ./
@@ -34,11 +48,18 @@ Resources:
       Description: Uses generative AI to create image based on given search prompt
       Policies:
         - Statement:
-            - Sid: BedrockInvoke
+            - Sid: AllowBedrockModelInvoke
               Effect: Allow
               Action:
                 - bedrock:InvokeModel
-              Resource: 'arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-canvas-v1:0'
+              Resource: arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-canvas-v1:0
+        - Statement:
+            - Sid: AllowBucketObjectAccess
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+              Resource: 'arn:aws:s3:::case-consulting-mgmt-genbot-images/*'
       Events:
         GenBot:
           Type: HttpApi # More info about HTTP API Event Source: https://github.com/aws/serverless-application-model/blob/master/versions/2016-10-31.md#httpapi
