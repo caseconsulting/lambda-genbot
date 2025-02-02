@@ -10,9 +10,12 @@ Globals:
   Api:
     Name: genbot
     EndpointConfiguration: REGIONAL
+    BinaryMediaTypes:
+      - application/octet-stream
   Function:
     Runtime: nodejs22.x
     Timeout: 30
+    MemorySize: 512
     Tags:
       Application: bots
     Environment:
@@ -27,6 +30,13 @@ Resources:
       CodeUri: ./
       Handler: app.handler
       Description: Uses generative AI to create image based on given search prompt
+      Policies:
+        - Statement:
+            - Sid: BedrockInvoke
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: 'arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-canvas-v1:0'
       Events:
         GenBot:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api

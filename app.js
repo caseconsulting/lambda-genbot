@@ -80,12 +80,12 @@ export const handler = async (event, context) => {
   let response;
 
   const body = JSON.parse(event.body);
-  const prompt = body.prompt;
+  const command = body.command;
   const companyId = body.creator.company.id;
 
   if (companyId == process.env.companyId) {
     try {
-      const base64Image = await invokeModel(prompt);
+      const base64Image = await invokeModel(command);
       response = {
         statusCode: 200,
         body: base64Image
@@ -98,11 +98,11 @@ export const handler = async (event, context) => {
       };
     }
   } else {
+    console.log('Access denied');
     response = {
       statusCode: 403,
       body: 'Access Denied'
     };
-    console.log('Access denied');
   }
 
   return response;
