@@ -12,6 +12,7 @@ Globals:
     EndpointConfiguration: REGIONAL
     BinaryMediaTypes:
       - image/jpeg
+      - image/jpg
   Function:
     Runtime: nodejs22.x
     Timeout: 30
