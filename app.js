@@ -9,10 +9,12 @@ const config = { region: REGION };
 const bedrockClient = new BedrockRuntimeClient(config);
 const s3Client = new S3Client(config);
 
+const IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX = 320;
+const IMAGE_GENERATION_MAX_SEED = 1048576;
+const IMAGE_GENERATION_PROMPT_ADHERENCE = 8.0;
+
 const BUCKET_NAME = 'case-consulting-mgmt-genbot-images';
 const PRESIGNED_URL_EXPIRES_IN_DAYS = 7;
-
-const MAX_SEED = 1048576;
 
 /**
  * Invokes Amazon Bedrock model to convert prompt text to image.
@@ -25,19 +27,19 @@ export const invokeModel = async (prompt, modelId = 'amazon.nova-canvas-v1:0') =
   try {
     // Prepare the payload
     console.log(`Preparing payload for text prompt: ${prompt}`);
-    const seed = Math.floor(Math.random() * MAX_SEED); // default is 12
+    const seed = Math.floor(Math.random() * IMAGE_GENERATION_MAX_SEED);
     const payload = {
       taskType: 'TEXT_IMAGE',
       textToImageParams: {
         text: prompt
       },
       imageGenerationConfig: {
-        numberOfImages: 1, // default is 1
-        height: 320, // default is 1024. Minimum is 320.
-        width: 320, // default is 1024. Minimum is 320.
-        quality: 'standard', // default is 'standard'
-        cfgScale: 8.0, // default is 6.5
-        seed
+        numberOfImages: 1, // Default is 1
+        height: IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX, // Default is 1024. Minimum is 320. Maximum is 4096.
+        width: IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX, // Default is 1024. Minimum is 320. Maximum is 4096.
+        quality: 'standard', // Default is 'standard'
+        cfgScale: IMAGE_GENERATION_PROMPT_ADHERENCE, // Default is 6.5. Lower value introduces more randomness.
+        seed // Default is 12
       }
     };
 
