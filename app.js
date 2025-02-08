@@ -111,7 +111,7 @@ export const saveImageToBucket = async (imageBuffer, requestId) => {
 };
 
 /**
- * Uses generative AI to create image based on given search prompt.
+ * Uses generative AI to create image based on given prompt.
  * Saves image to S3 bucket.
  * Generates presigned URL, which is valid for seven days, to get object from bucket.
  * Returns HTML img tag that references presigned URL.

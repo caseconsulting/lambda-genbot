@@ -3,7 +3,7 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   genbot
 
-  Uses generative AI to create image based on given search prompt
+  Uses generative AI to create image based on given prompt
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
@@ -45,7 +45,7 @@ Resources:
       FunctionName: genbot
       CodeUri: ./
       Handler: app.handler
-      Description: Uses generative AI to create image based on given search prompt
+      Description: Uses generative AI to create image based on given prompt
       Policies:
         - Statement:
             - Sid: InvokeFoundationModel

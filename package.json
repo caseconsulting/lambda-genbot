@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": "./app.js",
-  "description": "Uses generative AI to create image based on given search prompt",
+  "description": "Uses generative AI to create image based on given prompt",
   "repository": "https://github.com/caseconsulting/lambda-genbot",
   "author": "CASE",
   "scripts": {
