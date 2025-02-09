@@ -63,7 +63,7 @@ You can find your API Gateway Endpoint URL in the output values displayed after 
 Build your application with the `sam build` command.
 
 ```bash
-lambda-genbot$ sam build
+sam build
 ```
 
 The SAM CLI installs dependencies defined in `package.json`, creates a deployment package, and saves it in the `.aws-sam/build` folder.
@@ -73,14 +73,14 @@ Test a single function by invoking it directly with a test event. An event is a 
 Run functions locally and invoke them with the `sam local invoke` command.
 
 ```bash
-lambda-genbot$ sam local invoke GenBotFunction -e event-generate.json --profile mgmt
+sam local invoke GenBotFunction -e event-generate.json --profile mgmt
 ```
 
 The SAM CLI can also emulate your application's API. Use the `sam local start-api` to run the API locally on port 3000.
 
 ```bash
-sam-app$ sam local start-api
-sam-app$ curl http://localhost:3000/
+sam local start-api
+curl http://localhost:3000/
 ```
 
 The SAM CLI reads the application template to determine the API's routes and the functions that they invoke. The `Events` property on each function's definition includes the route and method for each path.
@@ -105,7 +105,8 @@ To simplify troubleshooting, SAM CLI has a command called `sam logs`. `sam logs`
 `NOTE`: This command works for all AWS Lambda functions; not just the ones you deploy using SAM.
 
 ```bash
-lambda-genbot$ sam logs -n genbotFunction --stack-name lambda-genbot --tail
+sam logs -n GenBotFunction --stack-name lambda-genbot --tail --profile mgmt
+sam logs -n GenBotRetrieveFunction --stack-name lambda-genbot-retrieve --tail --profile mgmt
 ```
 
 You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
@@ -116,6 +117,7 @@ To delete the application, use the AWS CLI and run the following:
 
 ```bash
 aws cloudformation delete-stack --stack-name lambda-genbot
+aws cloudformation delete-stack --stack-name lambda-genbot-retrieve
 ```
 
 ## Resources
