@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  genbot
+
+  Uses generative AI to create image based on given prompt
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  HttpApi:
+    AccessLogSettings:
+      DestinationArn: !GetAtt GenBotFunctionApiLogGroup.Arn
+      # Common Log Format (CLF) - https://httpd.apache.org/docs/current/logs.html#common
+      Format: $context.identity.sourceIp - - [$context.requestTime] "$context.httpMethod $context.routeKey $context.protocol" $context.status $context.responseLength $context.requestId $context.extendedRequestId
+    Tags:
+      Application: bots
+  Function:
+    Runtime: nodejs22.x
+    Timeout: 15
+    MemorySize: 512
+    Tags:
+      Application: bots
+    Environment:
+      Variables:
+        companyId: '{{resolve:ssm:/Basecamp/CompanyID:1}}'
+        retrieveApi: !ImportValue GenBotRetrieveApi
+
+Resources:
+  GenBotImagesBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: case-consulting-mgmt-genbot-images
+      LifecycleConfiguration:
+        Rules:
+          - Id: Remove old images
+            ExpirationInDays: 183 # ~6 months
+            Status: Enabled
+      Tags:
+        - Key: Application
+          Value: bots
+  GenBotFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    DependsOn:
+      - GenBotImagesBucket
+    Properties:
+      FunctionName: genbot
+      CodeUri: ./
+      Handler: generate.handler
+      Description: Uses generative AI to create image based on given prompt
+      Policies:
+        - Statement:
+            - Sid: InvokeFoundationModel
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-canvas-v1:0
+        - Statement:
+            - Sid: AllowImageBucketObjectPut
+              Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: 'arn:aws:s3:::case-consulting-mgmt-genbot-images/*'
+      Events:
+        GenBot:
+          Type: HttpApi # More info about HTTP API Event Source: https://github.com/aws/serverless-application-model/blob/master/versions/2016-10-31.md#httpapi
+          Properties:
+            Path: /
+            Method: post
+  GenBotFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DependsOn:
+      - GenBotFunction
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${GenBotFunction}
+      RetentionInDays: 30
+  GenBotFunctionApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    DependsOn:
+      - GenBotFunction
+    Properties:
+      LogGroupName: !Sub /aws/api-gateway/${GenBotFunction}
+      RetentionInDays: 30
+
+Outputs:
+  # ServerlessHttpApi is an implicit HTTP API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  GenBotApi:
+    Description: 'GenBot HTTP API Endpoint URL'
+    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+  GenBotFunction:
+    Description: 'GenBot Lambda Function ARN'
+    Value: !GetAtt GenBotFunction.Arn
+  GenBotFunctionIamRole:
+    Description: 'Implicit IAM Role created for GenBot function'
+    Value: !GetAtt GenBotFunctionRole.Arn
+  GenBotImagesBucket:
+    Description: 'GenBot Images Bucket Name'
+    Value: !Ref GenBotImagesBucket

@@ -1,0 +1,35 @@
+{
+  "version": "2.0",
+  "routeKey": "$default",
+  "rawPath": "/abc.png",
+  "rawQueryString": "",
+  "cookies": [],
+  "headers": {},
+  "queryStringParameters": {},
+  "requestContext": {
+    "accountId": "123456789012",
+    "apiId": "api-id",
+    "authentication": {},
+    "authorizer": {},
+    "domainName": "id.execute-api.us-east-1.amazonaws.com",
+    "domainPrefix": "id",
+    "http": {
+      "method": "GET",
+      "path": "/abc.png",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "192.0.2.1",
+      "userAgent": "agent"
+    },
+    "requestId": "id",
+    "routeKey": "$default",
+    "stage": "$default",
+    "time": "12/Mar/2020:19:03:58 +0000",
+    "timeEpoch": 1583348638390
+  },
+  "body": "",
+  "pathParameters": {
+    "imagePath": "abc.png"
+  },
+  "isBase64Encoded": false,
+  "stageVariables": {}
+}

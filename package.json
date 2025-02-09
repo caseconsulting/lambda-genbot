@@ -8,16 +8,20 @@
   "repository": "https://github.com/caseconsulting/lambda-genbot",
   "author": "CASE",
   "scripts": {
-    "build": "sam build -t template.yaml",
-    "deploy": "npm run build && sam deploy --template-file template.yaml --region us-east-1 --capabilities CAPABILITY_IAM --s3-prefix lambda-genbot --s3-bucket case-consulting-mgmt-sam-deployments --stack-name lambda-genbot --profile mgmt",
-    "local": "npm run build && sam local invoke GenBotFunction -e event.json --profile mgmt",
+    "build": "npm run build:retrieve && npm run build:genbot",
+    "build:genbot": "sam build -t template-genbot.yaml",
+    "build:retrieve": "sam build -t template-retrieve.yaml",
+    "deploy": "npm run deploy:retrieve && npm run deploy:genbot",
+    "deploy:genbot": "npm run build:genbot && sam deploy --template-file template-genbot.yaml --region us-east-1 --capabilities CAPABILITY_IAM --s3-prefix lambda-genbot --s3-bucket case-consulting-mgmt-sam-deployments --stack-name lambda-genbot --profile mgmt",
+    "deploy:retrieve": "npm run build:retrieve && sam deploy --template-file template-retrieve.yaml --region us-east-1 --capabilities CAPABILITY_IAM --s3-prefix lambda-genbot-retrieve --s3-bucket case-consulting-mgmt-sam-deployments --stack-name lambda-genbot-retrieve --profile mgmt",
+    "local:genbot": "npm run build:genbot && sam local invoke GenBotFunction -e event-generate.json --profile mgmt",
+    "local:retrieve": "npm run build:retrieve && sam local invoke GenBotRetrieveFunction -e event-retrieve.json --profile mgmt",
     "login": "aws sso login --profile mgmt"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "3.744.0",
     "@aws-sdk/client-s3": "3.744.0",
     "@aws-sdk/s3-request-presigner": "3.744.0",
-    "@smithy/util-base64": "4.0.0",
-    "axios": "1.7.9"
+    "@smithy/util-base64": "4.0.0"
   }
 }

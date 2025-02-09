@@ -1,96 +1,74 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  genbot
+  genbot-retrieve
 
-  Uses generative AI to create image based on given prompt
+  Retrieves generated image
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   HttpApi:
     AccessLogSettings:
-      DestinationArn: !GetAtt GenBotFunctionApiLogGroup.Arn
+      DestinationArn: !GetAtt GenBotRetrieveFunctionApiLogGroup.Arn
       # Common Log Format (CLF) - https://httpd.apache.org/docs/current/logs.html#common
       Format: $context.identity.sourceIp - - [$context.requestTime] "$context.httpMethod $context.routeKey $context.protocol" $context.status $context.responseLength $context.requestId $context.extendedRequestId
     Tags:
       Application: bots
   Function:
     Runtime: nodejs22.x
-    Timeout: 30
+    Timeout: 5
     MemorySize: 512
     Tags:
       Application: bots
-    Environment:
-      Variables:
-        companyId: '{{resolve:ssm:/Basecamp/CompanyID:1}}'
 
 Resources:
-  GenBotImagesBucket:
-    Type: 'AWS::S3::Bucket'
-    Properties:
-      BucketName: case-consulting-mgmt-genbot-images
-      LifecycleConfiguration:
-        Rules:
-          - Id: Remove old images
-            ExpirationInDays: 183 # ~6 months
-            Status: Enabled
-      Tags:
-        - Key: Application
-          Value: bots
-  GenBotFunction:
+  GenBotRetrieveFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    DependsOn:
-      - GenBotImagesBucket
     Properties:
-      FunctionName: genbot
+      FunctionName: genbot-retrieve
       CodeUri: ./
-      Handler: app.handler
-      Description: Uses generative AI to create image based on given prompt
+      Handler: retrieve.handler
+      Description: Retrieves generated image
       Policies:
         - Statement:
-            - Sid: InvokeFoundationModel
-              Effect: Allow
-              Action:
-                - bedrock:InvokeModel
-              Resource: !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-canvas-v1:0
-        - Statement:
-            - Sid: AllowImageBucketObjectAccess
+            - Sid: AllowImageBucketObjectGet
               Effect: Allow
               Action:
                 - s3:GetObject
-                - s3:PutObject
               Resource: 'arn:aws:s3:::case-consulting-mgmt-genbot-images/*'
       Events:
         GenBot:
           Type: HttpApi # More info about HTTP API Event Source: https://github.com/aws/serverless-application-model/blob/master/versions/2016-10-31.md#httpapi
           Properties:
-            Path: /
-            Method: post
-  GenBotFunctionLogGroup:
+            Path: /{imagePath+}
+            Method: get
+  GenBotRetrieveFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     DependsOn:
-      - GenBotFunction
+      - GenBotRetrieveFunction
     Properties:
-      LogGroupName: !Sub /aws/lambda/${GenBotFunction}
+      LogGroupName: !Sub /aws/lambda/${GenBotRetrieveFunction}
       RetentionInDays: 30
-  GenBotFunctionApiLogGroup:
+  GenBotRetrieveFunctionApiLogGroup:
     Type: AWS::Logs::LogGroup
     DependsOn:
-      - GenBotFunction
+      - GenBotRetrieveFunction
     Properties:
-      LogGroupName: !Sub /aws/api-gateway/${GenBotFunction}
+      LogGroupName: !Sub /aws/api-gateway/${GenBotRetrieveFunction}
       RetentionInDays: 30
 
 Outputs:
   # ServerlessHttpApi is an implicit HTTP API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  GenBotApi:
-    Description: 'GenBot HTTP API Gateway endpoint URL'
-    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/'
-  GenBotFunction:
+  GenBotRetrieveApi:
+    Description: 'GenBot HTTP API Endpoint URL'
+    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+    Export:
+      Name: GenBotRetrieveApi
+  GenBotRetrieveFunction:
     Description: 'GenBot Lambda Function ARN'
-    Value: !GetAtt GenBotFunction.Arn
-  GenBotFunctionIamRole:
+    Value: !GetAtt GenBotRetrieveFunction.Arn
+  GenBotRetrieveFunctionIamRole:
     Description: 'Implicit IAM Role created for GenBot function'
-    Value: !GetAtt GenBotFunctionRole.Arn
+    Value: !GetAtt GenBotRetrieveFunctionRole.Arn

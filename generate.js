@@ -1,8 +1,6 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import { GetObjectCommand, PutObjectCommand, S3Client, S3ServiceException } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { PutObjectCommand, S3Client, S3ServiceException } from '@aws-sdk/client-s3';
 import { fromBase64 } from '@smithy/util-base64';
-import axios from 'axios';
 
 // Create Amazon Bedrock Runtime and S3 clients
 const REGION = 'us-east-1';
@@ -15,14 +13,13 @@ const IMAGE_GENERATION_MAX_SEED = 1048576;
 const IMAGE_GENERATION_PROMPT_ADHERENCE = 8.0;
 
 const BUCKET_NAME = 'case-consulting-mgmt-genbot-images';
-const PRESIGNED_URL_EXPIRES_IN_DAYS = 7;
 
 /**
  * Invokes Amazon Bedrock model to convert prompt text to image.
  *
  * @param {string} prompt - The input text prompt for the model.
  * @param {string} [modelId] - The ID of the model to use. Defaults to "amazon.nova-canvas-v1:0".
- * @returns {Uint8Array} Image bytes
+ * @returns {Uint8Array} The image bytes.
  */
 export const invokeModel = async (prompt, modelId = 'amazon.nova-canvas-v1:0') => {
   try {
@@ -74,16 +71,18 @@ export const invokeModel = async (prompt, modelId = 'amazon.nova-canvas-v1:0') =
 };
 
 /**
- * Saves image to bucket and returns presigned URL to get image file from bucket.
+ * Saves image to bucket.
  *
  * @param {Uint8Array} imageBuffer - The image bytes.
  * @param {string} requestId - The identifier of the Lambda invocation request.
- * @returns {string} Presigned URL to get image file from bucket
+ * @returns {string} The image file name saved to bucket.
  */
 export const saveImageToBucket = async (imageBuffer, requestId) => {
   try {
-    // Write image file to bucket
+    // Create image file name
     const imageFileName = `${requestId}.png`;
+
+    // Write image file to bucket
     console.log(`Saving ${imageFileName} image to ${BUCKET_NAME} bucket`);
     const putCommand = new PutObjectCommand({
       Bucket: BUCKET_NAME,
@@ -94,15 +93,8 @@ export const saveImageToBucket = async (imageBuffer, requestId) => {
     const response = await s3Client.send(putCommand);
     console.log(`Saved ${imageFileName} image to ${BUCKET_NAME} bucket`);
 
-    // Return presigned URL to get image file from bucket
-    const getCommand = new GetObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: imageFileName
-    });
-    const expiresInSeconds = PRESIGNED_URL_EXPIRES_IN_DAYS * 24 * 60 * 60; // # days * 24 hours/day * 60 mins/hour * 60 secs/hour
-    console.log(`Generating presigned URL that expires in ${expiresInSeconds} seconds`);
-    const url = await getSignedUrl(s3Client, getCommand, { expiresIn: expiresInSeconds });
-    return url;
+    // Return image file name
+    return imageFileName;
   } catch (error) {
     if (error instanceof S3ServiceException) {
       console.error(`Error from S3 while uploading object to ${BUCKET_NAME}.  ${error.name}: ${error.message}`);
@@ -114,22 +106,19 @@ export const saveImageToBucket = async (imageBuffer, requestId) => {
 /**
  * Uses generative AI to create image based on given prompt.
  * Saves image to S3 bucket.
- * Generates presigned URL, which is valid for seven days, to get object from bucket.
- * Returns HTML img tag that references presigned URL.
+ * Returns URL to retrieve image from retrieve endpoint.
  *
  * @see {@link https://docs.aws.amazon.com/nova/latest/userguide/image-generation.html}
  * @see {@link https://community.aws/content/2rc9I0eNkAe22YwlNAkPuD2cHJe/harness-the-power-of-nova-canvas-for-creative-content-generation}
- * @see {@link https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html}
  *
- * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
- * @param {Object} event - API Gateway Lambda Proxy Input
+ * @param {Object} event - API Gateway HTTP API Lambda proxy integration payload
+ * @see {@link https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html}
  *
- * Context doc: https://docs.aws.amazon.com/lambda/latest/dg/nodejs-prog-model-context.html
  * @param {Object} context - Lambda context object
+ * @see {@link https://docs.aws.amazon.com/lambda/latest/dg/nodejs-prog-model-context.html}
  *
- * Return doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
- * @returns {Object} object - API Gateway Lambda Proxy Output
- *
+ * @returns {Object} object - API Gateway HTTP API Lambda proxy integration response
+ * @see {@link https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html}
  */
 export const handler = async (event, context) => {
   let response;
@@ -138,22 +127,20 @@ export const handler = async (event, context) => {
   const body = JSON.parse(event.body);
   const command = body.command;
   const companyId = body.creator.company.id;
-  const callbackUrl = body.callback_url;
 
   if (companyId == process.env.companyId) {
     try {
-      const workingHtml = '<p>Working on it... &#x1F4AC</p>';
-      await axios.post(callbackUrl, workingHtml, { headers: { 'Content-Type': 'text/html' } });
-
       const imageBuffer = await invokeModel(command);
-      const url = await saveImageToBucket(imageBuffer, requestId);
-      const html = `<img src="${url}" alt="${command}" width="${IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX}" height="${IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX}"/>`;
+      const imageFileName = await saveImageToBucket(imageBuffer, requestId);
+      const retrieveEndpoint = process.env.retrieveApi;
+      const responseUrl = `${retrieveEndpoint}/${imageFileName}`;
+      console.log(`Returning response URL: ${responseUrl}`);
       response = {
         statusCode: 200,
-        body: html
+        body: responseUrl
       };
     } catch (error) {
-      console.error('Error generating image:', error);
+      console.error('Error generating image:', error.message);
       response = {
         statusCode: 200,
         body: 'Something went wrong :( https://media.giphy.com/media/l41JNsXAvFvoHvWJW/giphy.gif'
