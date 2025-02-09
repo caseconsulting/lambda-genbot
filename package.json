@@ -21,7 +21,6 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "3.744.0",
     "@aws-sdk/client-s3": "3.744.0",
-    "@aws-sdk/s3-request-presigner": "3.744.0",
     "@smithy/util-base64": "4.0.0"
   }
 }
