@@ -38,25 +38,30 @@ export const getImage = async (imageFileName) => {
 
 /**
  * Gets specified image from bucket.
- * Returns Base64-encoded image string.
+ * Returns image as Base64-encoded string.
  *
- * @param {Object} event - API Gateway HTTP API Lambda proxy integration payload
- * @see {@link https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html}
+ * @param {Object} event - Lambda Function URL request
+ * @see {@link https://docs.aws.amazon.com/lambda/latest/dg/urls-invocation.html}
  *
  * @param {Object} context - Lambda context object
  * @see {@link https://docs.aws.amazon.com/lambda/latest/dg/nodejs-prog-model-context.html}
  *
- * @returns {Object} object - API Gateway HTTP API Lambda proxy integration response
- * @see {@link https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html}
+ * @returns {Object} object - Lambda Function URL response
+ * @see {@link https://docs.aws.amazon.com/lambda/latest/dg/urls-invocation.html}
  */
 export const handler = async (event, context) => {
   let response;
 
-  const imagePath = event.pathParameters.imagePath;
-
   try {
-    console.log(`Getting ${imagePath} from ${BUCKET_NAME}`);
-    const base64Body = await getImage(imagePath);
+    // Obtain image file name from request path (e.g., /abc.png)
+    const requestPath = event.requestContext.http.path;
+    const imageFileName = requestPath.replace(/^\//, '');
+    console.log(`Getting ${imageFileName} from ${BUCKET_NAME}`);
+
+    // Get image file, as Base64-encoded string
+    const base64Body = await getImage(imageFileName);
+
+    // Return image as Base64-encoded string
     response = {
       headers: {
         'content-type': 'image/jpg'
@@ -66,6 +71,7 @@ export const handler = async (event, context) => {
       isBase64Encoded: true
     };
   } catch (error) {
+    // Redirect to 'Something went wrong' image
     response = {
       statusCode: 303,
       headers: {

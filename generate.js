@@ -133,7 +133,7 @@ export const handler = async (event, context) => {
       const imageBuffer = await invokeModel(command);
       const imageFileName = await saveImageToBucket(imageBuffer, requestId);
       const retrieveEndpoint = process.env.retrieveApi;
-      const responseUrl = `${retrieveEndpoint}/${imageFileName}`;
+      const responseUrl = `${retrieveEndpoint}${imageFileName}`;
       console.log(`Returning response URL: ${responseUrl}`);
       response = {
         statusCode: 200,

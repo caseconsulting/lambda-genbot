@@ -5,7 +5,7 @@ Description: >
 
   Uses generative AI to create image based on given prompt
 
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+# More info about Globals: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-template-anatomy-globals.html
 Globals:
   HttpApi:
     AccessLogSettings:
@@ -39,7 +39,7 @@ Resources:
         - Key: Application
           Value: bots
   GenBotFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
     DependsOn:
       - GenBotImagesBucket
     Properties:
@@ -62,7 +62,7 @@ Resources:
               Resource: 'arn:aws:s3:::case-consulting-mgmt-genbot-images/*'
       Events:
         GenBot:
-          Type: HttpApi # More info about HTTP API Event Source: https://github.com/aws/serverless-application-model/blob/master/versions/2016-10-31.md#httpapi
+          Type: HttpApi # More info about HTTP API Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-httpapi.html
           Properties:
             Path: /
             Method: post
@@ -87,7 +87,7 @@ Outputs:
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
   GenBotApi:
     Description: 'GenBot HTTP API Endpoint URL'
-    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/'
   GenBotFunction:
     Description: 'GenBot Lambda Function ARN'
     Value: !GetAtt GenBotFunction.Arn
