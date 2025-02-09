@@ -2,6 +2,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { GetObjectCommand, PutObjectCommand, S3Client, S3ServiceException } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { fromBase64 } from '@smithy/util-base64';
+import axios from 'axios';
 
 // Create Amazon Bedrock Runtime and S3 clients
 const REGION = 'us-east-1';
@@ -137,9 +138,13 @@ export const handler = async (event, context) => {
   const body = JSON.parse(event.body);
   const command = body.command;
   const companyId = body.creator.company.id;
+  const callbackUrl = body.callback_url;
 
   if (companyId == process.env.companyId) {
     try {
+      const workingHtml = '<p>Working on it... &#x1F4AC</p>';
+      await axios.post(callbackUrl, workingHtml, { headers: { 'Content-Type': 'text/html' } });
+
       const imageBuffer = await invokeModel(command);
       const url = await saveImageToBucket(imageBuffer, requestId);
       const html = `<img src="${url}" alt="${command}" width="${IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX}" height="${IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX}"/>`;
