@@ -2,19 +2,13 @@
 
 This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
 
-**GenBot Lambda function**
-
 - generate.js - Code for the GenBot Lambda function.
 - event-generate.json - Sample event that you can use to invoke the GenBot function.
-- template-generate.yaml - A template that defines the GenBot function's AWS resources.
-
-**GenBot Retrieve Lambda function**
-
 - retrieve.js - Code for the GenBot Retrieve Lambda function.
 - event-retrieve.json - Sample event that you can use to invoke the GenBot Retrieve function.
-- template-retrieve.yaml - A template that defines the GenBot Retrieve function's AWS resources.
+- template.yaml - A template that defines the AWS resources for the GenBot and GenBot Retrieve functions.
 
-The application uses several AWS resources, including Lambda functions and IAM Roles. These resources are defined in the `template-generate.yaml` and `template-retrieve.yaml` files in this project. You can update the templates to add AWS resources through the same deployment process that updates your application code.
+The application uses several AWS resources, including Lambda functions and IAM Roles. These resources are defined in the `template.yaml` file in this project. You can update the templates to add AWS resources through the same deployment process that updates your application code.
 
 ## AWS SSO Configuration
 
@@ -97,7 +91,7 @@ Events:
 
 ## Add a resource to your application
 
-The application template uses AWS Serverless Application Model (AWS SAM) to define application resources. AWS SAM is an extension of AWS CloudFormation with a simpler syntax for configuring common serverless application resources such as functions, triggers, and APIs. For resources not included in [the SAM specification](https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md), you can use standard [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html) resource types.
+The application template uses AWS Serverless Application Model (AWS SAM) to define application resources. AWS SAM is an extension of AWS CloudFormation with a simpler syntax for configuring common serverless application resources such as functions, triggers, and APIs. For resources not included in [the SAM specification](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-resources-and-properties.html), you can use standard [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html) resource types.
 
 ## Fetch, tail, and filter Lambda function logs
 
@@ -107,10 +101,10 @@ To simplify troubleshooting, SAM CLI has a command called `sam logs`. `sam logs`
 
 ```bash
 sam logs -n GenBotFunction --stack-name lambda-genbot --tail --profile mgmt
-sam logs -n GenBotRetrieveFunction --stack-name lambda-genbot-retrieve --tail --profile mgmt
+sam logs -n GenBotRetrieveFunction --stack-name lambda-genbot --tail --profile mgmt
 ```
 
-You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
+You can find more information and examples about filtering Lambda function logs in the [SAM Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
 
 ## Cleanup
 
@@ -118,7 +112,6 @@ To delete the application, use the AWS CLI and run the following:
 
 ```bash
 aws cloudformation delete-stack --stack-name lambda-genbot --profile mgmt
-aws cloudformation delete-stack --stack-name lambda-genbot-retrieve --profile mgmt
 ```
 
 ## Resources

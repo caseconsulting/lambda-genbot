@@ -16,14 +16,8 @@ Globals:
       Application: bots
   Function:
     Runtime: nodejs22.x
-    Timeout: 15
-    MemorySize: 512
     Tags:
       Application: bots
-    Environment:
-      Variables:
-        companyId: '{{resolve:ssm:/Basecamp/CompanyID:1}}'
-        retrieveApi: !ImportValue GenBotRetrieveApi
 
 Resources:
   GenBotImagesBucket:
@@ -42,11 +36,18 @@ Resources:
     Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
     DependsOn:
       - GenBotImagesBucket
+      - GenBotRetrieveFunctionUrl
     Properties:
       FunctionName: genbot
       CodeUri: ./
       Handler: generate.handler
       Description: Uses generative AI to create image based on given prompt
+      Timeout: 15
+      MemorySize: 512
+      Environment:
+        Variables:
+          companyId: '{{resolve:ssm:/Basecamp/CompanyID:1}}'
+          retrieveApi: !GetAtt GenBotRetrieveFunctionUrl.FunctionUrl
       Policies:
         - Statement:
             - Sid: InvokeFoundationModel
@@ -80,6 +81,36 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/api-gateway/${GenBotFunction}
       RetentionInDays: 30
+  GenBotRetrieveFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    DependsOn:
+      - GenBotImagesBucket
+    Properties:
+      FunctionName: genbot-retrieve
+      CodeUri: ./
+      Handler: retrieve.handler
+      Description: Retrieves generated image
+      Timeout: 5
+      MemorySize: 256
+      FunctionUrlConfig:
+        AuthType: NONE
+      Policies:
+        - Statement:
+            - Sid: AllowImageBucketObjectGet
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:ListBucket
+              Resource:
+                - 'arn:aws:s3:::case-consulting-mgmt-genbot-images'
+                - 'arn:aws:s3:::case-consulting-mgmt-genbot-images/*'
+  GenBotRetrieveFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DependsOn:
+      - GenBotRetrieveFunction
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${GenBotRetrieveFunction}
+      RetentionInDays: 30
 
 Outputs:
   # ServerlessHttpApi is an implicit HTTP API created out of Events key under Serverless::Function
@@ -94,6 +125,17 @@ Outputs:
   GenBotFunctionIamRole:
     Description: 'Implicit IAM Role created for GenBot function'
     Value: !GetAtt GenBotFunctionRole.Arn
+
+  GenBotRetrieveApi:
+    Description: 'GenBot Retrieve Lambda Function URL'
+    Value: !GetAtt GenBotRetrieveFunctionUrl.FunctionUrl
+  GenBotRetrieveFunction:
+    Description: 'GenBot Retrieve Lambda Function ARN'
+    Value: !GetAtt GenBotRetrieveFunction.Arn
+  GenBotRetrieveFunctionIamRole:
+    Description: 'Implicit IAM Role created for GenBot Retrieve function'
+    Value: !GetAtt GenBotRetrieveFunctionRole.Arn
+
   GenBotImagesBucket:
     Description: 'GenBot Images Bucket Name'
     Value: !Ref GenBotImagesBucket
