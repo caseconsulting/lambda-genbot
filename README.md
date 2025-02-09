@@ -2,9 +2,13 @@
 
 This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
 
+**GenBot Lambda function**
+
 - generate.js - Code for the GenBot Lambda function.
 - event-generate.json - Sample event that you can use to invoke the GenBot function.
 - template-generate.yaml - A template that defines the GenBot function's AWS resources.
+
+**GenBot Retrieve Lambda function**
 
 - retrieve.js - Code for the GenBot Retrieve Lambda function.
 - event-retrieve.json - Sample event that you can use to invoke the GenBot Retrieve function.
