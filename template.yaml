@@ -32,7 +32,7 @@ Resources:
       LifecycleConfiguration:
         Rules:
           - Id: Remove old images
-            ExpirationInDays: 8
+            ExpirationInDays: 183 # ~6 months
             Status: Enabled
       Tags:
         - Key: Application
