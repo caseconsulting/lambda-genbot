@@ -2,11 +2,15 @@
 
 This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
 
-- app.js - Code for the Lambda function.
-- event.json - Sample event that you can use to invoke the function.
-- template.yaml - A template that defines the application's AWS resources.
+- generate.js - Code for the GenBot Lambda function.
+- event-generate.json - Sample event that you can use to invoke the GenBot function.
+- template-generate.yaml - A template that defines the GenBot function's AWS resources.
 
-The application uses several AWS resources, including Lambda functions and an IAM Role. These resources are defined in the `template.yaml` file in this project. You can update the template to add AWS resources through the same deployment process that updates your application code.
+- retrieve.js - Code for the GenBot Retrieve Lambda function.
+- event-retrieve.json - Sample event that you can use to invoke the GenBot Retrieve function.
+- template-retrieve.yaml - A template that defines the GenBot Retrieve function's AWS resources.
+
+The application uses several AWS resources, including Lambda functions and IAM Roles. These resources are defined in the `template-generate.yaml` and `template-retrieve.yaml` files in this project. You can update the templates to add AWS resources through the same deployment process that updates your application code.
 
 ## AWS SSO Configuration
 
@@ -65,7 +69,7 @@ Test a single function by invoking it directly with a test event. An event is a 
 Run functions locally and invoke them with the `sam local invoke` command.
 
 ```bash
-lambda-genbot$ sam local invoke genbotFunction --event event.json
+lambda-genbot$ sam local invoke GenBotFunction -e event-generate.json --profile mgmt
 ```
 
 The SAM CLI can also emulate your application's API. Use the `sam local start-api` to run the API locally on port 3000.
@@ -80,7 +84,7 @@ The SAM CLI reads the application template to determine the API's routes and the
 ```yaml
 Events:
   GenBot:
-    Type: Api
+    Type: HttpApi
     Properties:
       Path: /
       Method: post
