@@ -74,6 +74,7 @@ Run functions locally and invoke them with the `sam local invoke` command.
 
 ```bash
 sam local invoke GenBotFunction -e event-generate.json --profile mgmt
+sam local invoke GenBotRetrieveFunction -e event-retrieve.json --profile mgmt
 ```
 
 The SAM CLI can also emulate your application's API. Use the `sam local start-api` to run the API locally on port 3000.
@@ -116,8 +117,8 @@ You can find more information and examples about filtering Lambda function logs 
 To delete the application, use the AWS CLI and run the following:
 
 ```bash
-aws cloudformation delete-stack --stack-name lambda-genbot
-aws cloudformation delete-stack --stack-name lambda-genbot-retrieve
+aws cloudformation delete-stack --stack-name lambda-genbot --profile mgmt
+aws cloudformation delete-stack --stack-name lambda-genbot-retrieve --profile mgmt
 ```
 
 ## Resources
