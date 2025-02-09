@@ -17,7 +17,7 @@ Globals:
   Function:
     Runtime: nodejs22.x
     Timeout: 5
-    MemorySize: 512
+    MemorySize: 256
     Tags:
       Application: bots
 
@@ -35,7 +35,10 @@ Resources:
               Effect: Allow
               Action:
                 - s3:GetObject
-              Resource: 'arn:aws:s3:::case-consulting-mgmt-genbot-images/*'
+                - s3:ListBucket
+              Resource:
+                - 'arn:aws:s3:::case-consulting-mgmt-genbot-images'
+                - 'arn:aws:s3:::case-consulting-mgmt-genbot-images/*'
       Events:
         GenBot:
           Type: HttpApi # More info about HTTP API Event Source: https://github.com/aws/serverless-application-model/blob/master/versions/2016-10-31.md#httpapi

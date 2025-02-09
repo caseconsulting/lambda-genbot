@@ -1,4 +1,4 @@
-import { GetObjectCommand, S3Client, S3ServiceException } from '@aws-sdk/client-s3';
+import { GetObjectCommand, NoSuchKey, S3Client } from '@aws-sdk/client-s3';
 import { toBase64 } from '@smithy/util-base64';
 
 // Create S3 client
@@ -11,8 +11,8 @@ const BUCKET_NAME = 'case-consulting-mgmt-genbot-images';
 /**
  * Gets image from bucket.
  *
- * @param {string} imageFileName - The image file path
- * @returns {string} Image converted to Base64-encoded string
+ * @param {string} imageFileName - The image file name.
+ * @returns {string} The image file converted to Base64-encoded string.
  */
 export const getImage = async (imageFileName) => {
   try {
@@ -27,8 +27,10 @@ export const getImage = async (imageFileName) => {
     const imageBytes = await response.Body.transformToByteArray();
     return toBase64(imageBytes);
   } catch (error) {
-    if (error instanceof S3ServiceException) {
-      console.error(`Error from S3 while getting image from ${BUCKET_NAME}.  ${error.name}: ${error.message}`);
+    if (error instanceof NoSuchKey) {
+      console.error('Image file not found.');
+    } else {
+      console.error(`Error while getting image from ${BUCKET_NAME}.  ${error.name}: ${error.message}`);
     }
     throw error;
   }
@@ -64,10 +66,11 @@ export const handler = async (event, context) => {
       isBase64Encoded: true
     };
   } catch (error) {
-    console.error('Error getting image:', error.message);
     response = {
-      statusCode: 200,
-      body: 'Something went wrong :( https://media.giphy.com/media/l41JNsXAvFvoHvWJW/giphy.gif'
+      statusCode: 303,
+      headers: {
+        Location: 'https://media.giphy.com/media/l41JNsXAvFvoHvWJW/giphy.gif'
+      }
     };
   }
 

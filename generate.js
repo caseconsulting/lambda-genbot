@@ -106,7 +106,7 @@ export const saveImageToBucket = async (imageBuffer, requestId) => {
 /**
  * Uses generative AI to create image based on given prompt.
  * Saves image to S3 bucket.
- * Returns URL to retrieve image from retrieve endpoint.
+ * Returns URL to retrieve image.
  *
  * @see {@link https://docs.aws.amazon.com/nova/latest/userguide/image-generation.html}
  * @see {@link https://community.aws/content/2rc9I0eNkAe22YwlNAkPuD2cHJe/harness-the-power-of-nova-canvas-for-creative-content-generation}
