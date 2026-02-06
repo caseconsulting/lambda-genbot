@@ -15,8 +15,8 @@
     "login": "aws sso login --profile mgmt"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "3.980.0",
-    "@aws-sdk/client-s3": "3.980.0",
+    "@aws-sdk/client-bedrock-runtime": "3.984.0",
+    "@aws-sdk/client-s3": "3.984.0",
     "@smithy/util-base64": "4.3.0"
   }
 }
