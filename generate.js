@@ -1,6 +1,7 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { PutObjectCommand, S3Client, S3ServiceException } from '@aws-sdk/client-s3';
 import { fromBase64 } from '@smithy/util-base64';
+import { readFile } from 'node:fs/promises';
 
 // Create Amazon Bedrock Runtime and S3 clients
 const REGION = 'us-east-1';
@@ -8,40 +9,72 @@ const config = { region: REGION };
 const bedrockClient = new BedrockRuntimeClient(config);
 const s3Client = new S3Client(config);
 
-const IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX = 320;
-const IMAGE_GENERATION_MAX_SEED = 1048576;
-const IMAGE_GENERATION_PROMPT_ADHERENCE = 8.0;
-
 const BUCKET_NAME = 'case-consulting-mgmt-genbot-images';
+
+const STYLE_PRESETS = [
+  '3d-model',
+  'analog-film',
+  'anime',
+  'cinematic',
+  'comic-book',
+  'digital-art',
+  'enhance',
+  'fantasy-art',
+  'isometric',
+  'line-art',
+  'low-poly',
+  'modeling-compound',
+  'neon-punk',
+  'origami',
+  'photographic',
+  'pixel-art',
+  'tile-texture'
+];
+
+/**
+ * Converts image to Base64-encoded bytes.
+ *
+ * @param {string} path - The image path.
+ * @returns {string} The Base-64 encoded image bytes.
+ */
+export const imageToBase64 = async (path) => {
+  try {
+    const buffer = await readFile(path);
+    return buffer.toString('base64');
+  } catch (error) {
+    console.error('Error reading image:', error);
+    throw error;
+  }
+};
 
 /**
  * Invokes Amazon Bedrock model to convert prompt text to image.
+ * Uses Stability AI Stable Image Style Guide model to generate new image based on prompt text, source image (CASE logo),
+ * and random style preset.
+ *
+ * NOTE: Previously used Amazon Nova Canvas model, but it was retired as legacy and could no longer be called.
+ *
+ * @see {@link https://docs.aws.amazon.com/bedrock/latest/userguide/stable-image-services.html}
+ * @see {@link https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-stability-ai-stable-image-style-guide.html}
  *
  * @param {string} prompt - The input text prompt for the model.
- * @param {string} [modelId] - The ID of the model to use. Defaults to "amazon.nova-canvas-v1:0".
  * @returns {Uint8Array} The image bytes.
  */
-export const invokeModel = async (prompt, modelId = 'amazon.nova-canvas-v1:0') => {
+export const invokeModel = async (prompt) => {
   try {
     // Prepare the payload
     console.log(`Preparing payload for text prompt: ${prompt}`);
-    const seed = Math.floor(Math.random() * IMAGE_GENERATION_MAX_SEED);
+    const randomNumber = Math.floor(Math.random() * STYLE_PRESETS.length);
+    const image = await imageToBase64('./case-logo.png');
     const payload = {
-      taskType: 'TEXT_IMAGE',
-      textToImageParams: {
-        text: prompt
-      },
-      imageGenerationConfig: {
-        numberOfImages: 1, // Default is 1
-        height: IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX, // Default is 1024. Minimum is 320. Maximum is 4096.
-        width: IMAGE_GENERATION_HEIGHT_WIDTH_IN_PX, // Default is 1024. Minimum is 320. Maximum is 4096.
-        quality: 'standard', // Default is 'standard'
-        cfgScale: IMAGE_GENERATION_PROMPT_ADHERENCE, // Default is 6.5. Lower value introduces more randomness.
-        seed // Default is 12
-      }
+      image,
+      prompt,
+      output_format: 'png',
+      style_preset: STYLE_PRESETS[randomNumber]
     };
 
     // Invoke the model with the payload and wait for the response
+    const modelId = `arn:aws:bedrock:${REGION}:${process.env.accountId}:inference-profile/us.stability.stable-image-style-guide-v1:0`;
     console.log(`Generating image with Bedrock model ${modelId}`);
     const params = {
       modelId,
@@ -59,11 +92,10 @@ export const invokeModel = async (prompt, modelId = 'amazon.nova-canvas-v1:0') =
 
     const finishReason = responseBody.error;
     if (finishReason) {
-      throw new Error(`Image generation error. Error is: ${finishReason}`);
+      throw new Error(`Model invocation error. Error is: ${finishReason}`);
     }
 
-    console.log(`Successfully generated image with Amazon Nova Canvas model ${modelId}`);
-    console.log(`Image generated successfully. Image size: ${imageBuffer.length} bytes`);
+    console.log(`Successfully generated image. Image size: ${imageBuffer.length} bytes`);
     return imageBuffer;
   } catch (error) {
     throw error;
@@ -107,9 +139,6 @@ export const saveImageToBucket = async (imageBuffer, requestId) => {
  * Uses generative AI to create image based on given prompt.
  * Saves image to S3 bucket.
  * Returns URL to retrieve image.
- *
- * @see {@link https://docs.aws.amazon.com/nova/latest/userguide/image-generation.html}
- * @see {@link https://community.aws/content/2rc9I0eNkAe22YwlNAkPuD2cHJe/harness-the-power-of-nova-canvas-for-creative-content-generation}
  *
  * @param {Object} event - API Gateway HTTP API Lambda proxy integration payload
  * @see {@link https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html}

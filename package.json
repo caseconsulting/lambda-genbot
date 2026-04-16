@@ -1,9 +1,8 @@
 {
   "name": "lambda-genbot",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "exports": "./app.js",
   "description": "Uses generative AI to create image based on given prompt",
   "repository": "https://github.com/caseconsulting/lambda-genbot",
   "author": "CASE",

@@ -15,7 +15,7 @@ Globals:
     Tags:
       Application: bots
   Function:
-    Runtime: nodejs22.x
+    Runtime: nodejs24.x
     Tags:
       Application: bots
 
@@ -46,6 +46,7 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
+          accountId: !Ref AWS::AccountId
           companyId: '{{resolve:ssm:/Basecamp/CompanyID:1}}'
           retrieveApi: !GetAtt GenBotRetrieveFunctionUrl.FunctionUrl
       Policies:
@@ -54,7 +55,9 @@ Resources:
               Effect: Allow
               Action:
                 - bedrock:InvokeModel
-              Resource: !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-canvas-v1:0
+              Resource:
+                - !Sub arn:aws:bedrock:*::foundation-model/stability.stable-image-style-guide-v1:0
+                - !Sub arn:aws:bedrock:${AWS::Region}:*:inference-profile/us.stability.stable-image-style-guide-v1:0
         - Statement:
             - Sid: AllowImageBucketObjectPut
               Effect: Allow
