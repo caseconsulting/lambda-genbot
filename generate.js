@@ -11,6 +11,8 @@ const s3Client = new S3Client(config);
 
 const BUCKET_NAME = 'case-consulting-mgmt-genbot-images';
 
+const SYSTEM_PROMPT = 'Generate a new 320px by 320px image that most closely responds to the following prompt:';
+
 const STYLE_PRESETS = [
   '3d-model',
   'analog-film',
@@ -68,7 +70,7 @@ export const invokeModel = async (prompt) => {
     const image = await imageToBase64('./case-logo.png');
     const payload = {
       image,
-      prompt,
+      prompt: `${SYSTEM_PROMPT} ${prompt}`,
       output_format: 'png',
       style_preset: STYLE_PRESETS[randomNumber]
     };
