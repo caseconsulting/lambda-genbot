@@ -42,7 +42,7 @@ Resources:
       CodeUri: ./
       Handler: generate.handler
       Description: Uses generative AI to create image based on given prompt
-      Timeout: 15
+      Timeout: 30
       MemorySize: 512
       Environment:
         Variables:
