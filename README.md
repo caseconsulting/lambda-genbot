@@ -73,6 +73,8 @@ sam build
 
 The SAM CLI installs dependencies defined in `package.json`, creates a deployment package, and saves it in the `.aws-sam/build` folder.
 
+When you no longer need the build output (after deploying or local testing), remove it with `npm run clean`. This keeps `.aws-sam/build.toml` (and any `--cached` build cache), which SAM reuses between builds.
+
 Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source.
 
 Run functions locally and invoke them with the `sam local invoke` command.
