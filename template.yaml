@@ -19,6 +19,16 @@ Globals:
     Tags:
       Application: bots
 
+Parameters:
+  BedrockRegion:
+    Type: String
+    Default: us-west-2
+    Description: Region to call Bedrock in (Stable Image Core is only offered in-region in us-west-2)
+  BedrockModelId:
+    Type: String
+    Default: stability.stable-image-core-v1:1
+    Description: Bedrock image generation model ID
+
 Resources:
   GenBotImagesBucket:
     Type: 'AWS::S3::Bucket'
@@ -34,9 +44,6 @@ Resources:
           Value: bots
   GenBotFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
-    DependsOn:
-      - GenBotImagesBucket
-      - GenBotRetrieveFunctionUrl
     Properties:
       FunctionName: genbot
       CodeUri: ./
@@ -46,6 +53,9 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
+          BUCKET_NAME: !Ref GenBotImagesBucket
+          bedrockRegion: !Ref BedrockRegion
+          modelId: !Ref BedrockModelId
           companyId: '{{resolve:ssm:/Basecamp/CompanyID:1}}'
           retrieveApi: !GetAtt GenBotRetrieveFunctionUrl.FunctionUrl
       Policies:
@@ -55,14 +65,13 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource:
-                # Stable Image Core is only available in-region in us-west-2 (no cross-region inference profile)
-                - arn:aws:bedrock:us-west-2::foundation-model/stability.stable-image-core-v1:1
+                - !Sub arn:aws:bedrock:${BedrockRegion}::foundation-model/${BedrockModelId}
         - Statement:
             - Sid: AllowImageBucketObjectPut
               Effect: Allow
               Action:
                 - s3:PutObject
-              Resource: 'arn:aws:s3:::case-consulting-mgmt-genbot-images/*'
+              Resource: !Sub '${GenBotImagesBucket.Arn}/*'
       Events:
         GenBot:
           Type: HttpApi # More info about HTTP API Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-httpapi.html
@@ -71,22 +80,16 @@ Resources:
             Method: post
   GenBotFunctionLogGroup:
     Type: AWS::Logs::LogGroup
-    DependsOn:
-      - GenBotFunction
     Properties:
       LogGroupName: !Sub /aws/lambda/${GenBotFunction}
       RetentionInDays: 30
   GenBotFunctionApiLogGroup:
     Type: AWS::Logs::LogGroup
-    DependsOn:
-      - GenBotFunction
     Properties:
       LogGroupName: !Sub /aws/api-gateway/${GenBotFunction}
       RetentionInDays: 30
   GenBotRetrieveFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
-    DependsOn:
-      - GenBotImagesBucket
     Properties:
       FunctionName: genbot-retrieve
       CodeUri: ./
@@ -95,6 +98,9 @@ Resources:
       Timeout: 5
       # More memory = more CPU/network for reading and Base64-encoding the image (on the critical path for Basecamp)
       MemorySize: 512
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref GenBotImagesBucket
       FunctionUrlConfig:
         AuthType: NONE
       Policies:
@@ -105,12 +111,10 @@ Resources:
                 - s3:GetObject
                 - s3:ListBucket
               Resource:
-                - 'arn:aws:s3:::case-consulting-mgmt-genbot-images'
-                - 'arn:aws:s3:::case-consulting-mgmt-genbot-images/*'
+                - !GetAtt GenBotImagesBucket.Arn
+                - !Sub '${GenBotImagesBucket.Arn}/*'
   GenBotRetrieveFunctionLogGroup:
     Type: AWS::Logs::LogGroup
-    DependsOn:
-      - GenBotRetrieveFunction
     Properties:
       LogGroupName: !Sub /aws/lambda/${GenBotRetrieveFunction}
       RetentionInDays: 30

@@ -1,18 +1,25 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { PutObjectCommand, S3Client, S3ServiceException } from '@aws-sdk/client-s3';
 import { fromBase64 } from '@smithy/util-base64';
+import { BUCKET_NAME, ERROR_IMAGE_URL, REGION } from './constants.js';
 
-// Lambda and S3 bucket live in us-east-1.
+// Model and region are set from template.yaml parameters, which also scope the IAM policy.
+// Defaults are for local runs and tests.
 // Stable Image Core is only offered in-region in us-west-2 (no cross-region inference profile), so Bedrock is called there.
-const REGION = 'us-east-1';
-const BEDROCK_REGION = 'us-west-2';
-const bedrockClient = new BedrockRuntimeClient({ region: BEDROCK_REGION });
+export const BEDROCK_REGION = process.env.bedrockRegion ?? 'us-west-2';
+export const MODEL_ID = process.env.modelId ?? 'stability.stable-image-core-v1:1';
+
+// Bound each Bedrock attempt and the number of attempts, so a slow or throttled generation still leaves time
+// to reply with the 'Something went wrong' message before the 30s Lambda/HTTP API timeout
+const bedrockClient = new BedrockRuntimeClient({
+  region: BEDROCK_REGION,
+  maxAttempts: 2,
+  requestHandler: { connectionTimeout: 3000, requestTimeout: 20000 }
+});
 const s3Client = new S3Client({ region: REGION });
 
-export const MODEL_ID = 'stability.stable-image-core-v1:1';
-
-const BUCKET_NAME = 'case-consulting-mgmt-genbot-images';
-const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+// Time reserved after generation for saving the image and responding
+export const SAVE_BUDGET_MS = 5000;
 
 // Bedrock's Stable Image Core rejects the style_preset field, so a random style is appended to the prompt text instead
 export const STYLES = [
@@ -34,8 +41,14 @@ export const STYLES = [
   'tile texture'
 ];
 
+// Stable Image Core accepts prompts up to 10,000 characters; leave room for the longest ', <style> style' suffix
+const MODEL_MAX_PROMPT_LENGTH = 10000;
+export const MAX_PROMPT_LENGTH =
+  MODEL_MAX_PROMPT_LENGTH - Math.max(...STYLES.map((style) => `, ${style} style`.length));
+
 /**
  * Builds the Stable Image Core text-to-image request payload, adding a random style to the prompt.
+ * Prompts longer than MAX_PROMPT_LENGTH are truncated so the styled prompt stays within the model's limit.
  *
  * @param {string} prompt - The input text prompt for the model.
  * @param {function(): number} [random=Math.random] - Random number generator returning [0, 1).
@@ -44,7 +57,7 @@ export const STYLES = [
 export const buildPayload = (prompt, random = Math.random) => {
   const style = STYLES[Math.floor(random() * STYLES.length)];
   return {
-    prompt: `${prompt}, ${style} style`,
+    prompt: `${prompt.slice(0, MAX_PROMPT_LENGTH)}, ${style} style`,
     aspect_ratio: '1:1',
     // JPEG is ~6x smaller than PNG (~0.5 MB vs ~3.3 MB at 1536x1536), which speeds up storage, retrieval, and display
     output_format: 'jpeg'
@@ -62,22 +75,23 @@ export const buildPayload = (prompt, random = Math.random) => {
  * @see {@link https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-diffusion-stable-image-core-text-image-request-response.html}
  *
  * @param {string} prompt - The input text prompt for the model.
+ * @param {number} timeoutMs - Maximum time to wait for Bedrock, including retries.
  * @returns {Uint8Array} The image bytes.
  */
-export const invokeModel = async (prompt) => {
+export const invokeModel = async (prompt, timeoutMs) => {
   // Prepare the payload
   const payload = buildPayload(prompt);
   console.log(`Prepared payload for text prompt: ${payload.prompt}`);
 
   // Invoke the model with the payload and wait for the response
-  console.log(`Generating image with Bedrock model ${MODEL_ID} in ${BEDROCK_REGION}`);
+  console.log(`Generating image with Bedrock model ${MODEL_ID} in ${BEDROCK_REGION} (timeout ${timeoutMs} ms)`);
   const command = new InvokeModelCommand({
     modelId: MODEL_ID,
     accept: 'application/json',
     contentType: 'application/json',
     body: JSON.stringify(payload)
   });
-  const response = await bedrockClient.send(command);
+  const response = await bedrockClient.send(command, { abortSignal: AbortSignal.timeout(timeoutMs) });
 
   // Decode response, check for filtered or failed generation, and return image
   const responseBody = JSON.parse(new TextDecoder().decode(response.body));
@@ -104,14 +118,13 @@ export const saveImageToBucket = async (imageBuffer, requestId) => {
     // Create image file name
     const imageFileName = `${requestId}.jpg`;
 
-    // Write image file to bucket; images are never modified, so they can be cached indefinitely
+    // Write image file to bucket; genbot-retrieve serves it with the stored content type
     console.log(`Saving ${imageFileName} image to ${BUCKET_NAME} bucket`);
     const putCommand = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: imageFileName,
       Body: imageBuffer,
-      ContentType: 'image/jpeg',
-      CacheControl: IMMUTABLE_CACHE_CONTROL
+      ContentType: 'image/jpeg'
     });
     await s3Client.send(putCommand);
     console.log(`Saved ${imageFileName} image to ${BUCKET_NAME} bucket`);
@@ -141,38 +154,42 @@ export const saveImageToBucket = async (imageBuffer, requestId) => {
  * @see {@link https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html}
  */
 export const handler = async (event, context) => {
-  let response;
-
   const requestId = context.awsRequestId;
-  const body = JSON.parse(event.body);
-  const command = body.command;
-  const companyId = body.creator.company.id;
 
-  if (companyId == process.env.companyId) {
-    try {
-      const imageBuffer = await invokeModel(command);
-      const imageFileName = await saveImageToBucket(imageBuffer, requestId);
-      const retrieveEndpoint = process.env.retrieveApi;
-      const responseUrl = `${retrieveEndpoint}${imageFileName}`;
-      console.log(`Returning response URL: ${responseUrl}`);
-      response = {
-        statusCode: 200,
-        body: responseUrl
-      };
-    } catch (error) {
-      console.error('Error generating image:', error.message);
-      response = {
-        statusCode: 200,
-        body: 'Something went wrong :( https://media.giphy.com/media/l41JNsXAvFvoHvWJW/giphy.gif'
-      };
-    }
-  } else {
+  // Public endpoint: reject anything that isn't a JSON body
+  let body;
+  try {
+    body = JSON.parse(event.body ?? '');
+  } catch {
+    console.log('Bad request, body is not valid JSON');
+    return { statusCode: 400, body: 'Bad Request' };
+  }
+  const command = body?.command;
+  const companyId = body?.creator?.company?.id;
+
+  // Only allow requests from the configured Basecamp company; deny if it's not configured
+  const expectedCompanyId = process.env.companyId;
+  if (!expectedCompanyId || companyId == null || String(companyId) !== expectedCompanyId) {
     console.log(`Access denied, invalid company ID provided: ${companyId}`);
-    response = {
-      statusCode: 403,
-      body: 'Access Denied'
-    };
+    return { statusCode: 403, body: 'Access Denied' };
   }
 
-  return response;
+  // Don't pay to generate an image from an empty prompt
+  const prompt = typeof command === 'string' ? command.trim() : '';
+  if (!prompt) {
+    console.log('No prompt provided');
+    return { statusCode: 200, body: 'Please include a description of the image to generate.' };
+  }
+
+  try {
+    const imageBuffer = await invokeModel(prompt, context.getRemainingTimeInMillis() - SAVE_BUDGET_MS);
+    const imageFileName = await saveImageToBucket(imageBuffer, requestId);
+    const responseUrl = `${process.env.retrieveApi}${imageFileName}`;
+    console.log(`Returning response URL: ${responseUrl}`);
+    return { statusCode: 200, body: responseUrl };
+  } catch (error) {
+    // Log the whole error (name, message, stack, and AWS $metadata request ID) to tell failure types apart
+    console.error('Error generating image:', error);
+    return { statusCode: 200, body: `Something went wrong :( ${ERROR_IMAGE_URL}` };
+  }
 };

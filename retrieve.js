@@ -1,40 +1,19 @@
 import { GetObjectCommand, NoSuchKey, S3Client } from '@aws-sdk/client-s3';
 import { toBase64 } from '@smithy/util-base64';
+import { BUCKET_NAME, ERROR_IMAGE_URL, REGION } from './constants.js';
 
 // Create S3 client
-const REGION = 'us-east-1';
-const config = { region: REGION };
-const client = new S3Client(config);
-
-const BUCKET_NAME = 'case-consulting-mgmt-genbot-images';
+const client = new S3Client({ region: REGION });
 
 // Images are never modified after creation (key is the unique request ID), so clients may cache them indefinitely
 const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
-const ERROR_IMAGE_URL = 'https://media.giphy.com/media/l41JNsXAvFvoHvWJW/giphy.gif';
-
-// Older images in the bucket are PNG; newer images are JPEG
-const CONTENT_TYPES = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png'
-};
-
-/**
- * Determines image content type from file name extension.
- *
- * @param {string} imageFileName - The image file name.
- * @returns {string} The image MIME type, defaulting to image/jpeg.
- */
-export const getContentType = (imageFileName) => {
-  const extension = imageFileName.split('.').pop().toLowerCase();
-  return CONTENT_TYPES[extension] ?? 'image/jpeg';
-};
 
 /**
  * Gets image from bucket.
  *
  * @param {string} imageFileName - The image file name.
- * @returns {string} The image file converted to Base64-encoded string.
+ * @returns {{body: string, contentType: string}} The image file converted to Base64-encoded string, and the
+ *   content type stored with it (older images are PNG; newer images are JPEG).
  */
 export const getImage = async (imageFileName) => {
   try {
@@ -45,9 +24,9 @@ export const getImage = async (imageFileName) => {
     });
     const response = await client.send(getCommand);
 
-    // Return image as Base64-encoded string
+    // Return image as Base64-encoded string, with its stored content type
     const imageBytes = await response.Body.transformToByteArray();
-    return toBase64(imageBytes);
+    return { body: toBase64(imageBytes), contentType: response.ContentType ?? 'image/jpeg' };
   } catch (error) {
     if (error instanceof NoSuchKey) {
       console.error('Image file not found.');
@@ -82,16 +61,16 @@ export const handler = async (event, context) => {
     console.log(`Getting ${imageFileName} from ${BUCKET_NAME} for user agent: ${event.requestContext.http.userAgent}`);
 
     // Get image file, as Base64-encoded string
-    const base64Body = await getImage(imageFileName);
+    const { body, contentType } = await getImage(imageFileName);
 
     // Return image as Base64-encoded string
     response = {
       headers: {
-        'content-type': getContentType(imageFileName),
+        'content-type': contentType,
         'cache-control': IMMUTABLE_CACHE_CONTROL
       },
       statusCode: 200,
-      body: base64Body,
+      body,
       isBase64Encoded: true
     };
   } catch (error) {

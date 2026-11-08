@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { GetObjectCommand, NoSuchKey, S3Client } from '@aws-sdk/client-s3';
-import { getContentType, getImage, handler } from '../retrieve.js';
+import { getImage, handler } from '../retrieve.js';
 
 const IMAGE_BYTES = Buffer.from('fake-jpeg-bytes');
 const ERROR_IMAGE_URL = 'https://media.giphy.com/media/l41JNsXAvFvoHvWJW/giphy.gif';
@@ -9,8 +9,11 @@ const ERROR_IMAGE_URL = 'https://media.giphy.com/media/l41JNsXAvFvoHvWJW/giphy.g
 /** Builds a Lambda Function URL event for the given request path. */
 const urlEvent = (path) => ({ requestContext: { http: { path, userAgent: 'test-agent' } } });
 
-/** Builds an S3 GetObject response with the given bytes. */
-const s3Object = (bytes) => ({ Body: { transformToByteArray: async () => new Uint8Array(bytes) } });
+/** Builds an S3 GetObject response with the given bytes and stored content type. */
+const s3Object = (bytes, contentType = 'image/jpeg') => ({
+  Body: { transformToByteArray: async () => new Uint8Array(bytes) },
+  ContentType: contentType
+});
 
 let s3Send;
 
@@ -25,30 +28,20 @@ afterEach(() => {
   mock.restoreAll();
 });
 
-describe('getContentType', () => {
-  it('maps JPEG extensions to image/jpeg', () => {
-    assert.equal(getContentType('abc.jpg'), 'image/jpeg');
-    assert.equal(getContentType('abc.JPEG'), 'image/jpeg');
-  });
-
-  it('maps older PNG images to image/png', () => {
-    assert.equal(getContentType('abc.png'), 'image/png');
-  });
-
-  it('defaults to image/jpeg for unknown or missing extensions', () => {
-    assert.equal(getContentType('abc.gif'), 'image/jpeg');
-    assert.equal(getContentType('abc'), 'image/jpeg');
-  });
-});
-
 describe('getImage', () => {
-  it('gets the object from the images bucket and returns it Base64-encoded', async () => {
-    const body = await getImage('req-1.jpg');
+  it('gets the object from the images bucket and returns it Base64-encoded with its content type', async () => {
+    const image = await getImage('req-1.jpg');
 
-    assert.equal(body, IMAGE_BYTES.toString('base64'));
+    assert.deepEqual(image, { body: IMAGE_BYTES.toString('base64'), contentType: 'image/jpeg' });
     const command = s3Send.mock.calls[0].arguments[0];
     assert.ok(command instanceof GetObjectCommand);
     assert.deepEqual(command.input, { Bucket: 'case-consulting-mgmt-genbot-images', Key: 'req-1.jpg' });
+  });
+
+  it('defaults to image/jpeg when the object has no stored content type', async () => {
+    s3Send.mock.mockImplementation(async () => s3Object(IMAGE_BYTES, undefined));
+
+    assert.equal((await getImage('req-1.jpg')).contentType, 'image/jpeg');
   });
 
   it('logs and rethrows missing images', async () => {
@@ -78,7 +71,9 @@ describe('handler', () => {
     assert.equal(s3Send.mock.calls[0].arguments[0].input.Key, 'req-1.jpg');
   });
 
-  it('returns older PNG images with the PNG content type', async () => {
+  it('returns older PNG images with their stored PNG content type', async () => {
+    s3Send.mock.mockImplementation(async () => s3Object(IMAGE_BYTES, 'image/png'));
+
     const response = await handler(urlEvent('/old.png'), {});
 
     assert.equal(response.headers['content-type'], 'image/png');

@@ -6,6 +6,8 @@ This project contains source code and supporting files for a serverless applicat
 - event-generate.json - Sample event that you can use to invoke the GenBot function.
 - retrieve.js - Code for the GenBot Retrieve Lambda function.
 - event-retrieve.json - Sample event that you can use to invoke the GenBot Retrieve function.
+- constants.js - Constants shared by both functions (region, bucket name, error image).
+- package.json - Dependencies, scripts, and the `files` list that limits what is packaged into each function.
 - test/ - Unit tests, run with `npm test`.
 - template.yaml - A template that defines the AWS resources for the GenBot and GenBot Retrieve functions.
 
