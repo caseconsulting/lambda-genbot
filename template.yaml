@@ -93,7 +93,8 @@ Resources:
       Handler: retrieve.handler
       Description: Retrieves generated image
       Timeout: 5
-      MemorySize: 256
+      # More memory = more CPU/network for reading and Base64-encoding the image (on the critical path for Basecamp)
+      MemorySize: 512
       FunctionUrlConfig:
         AuthType: NONE
       Policies:
