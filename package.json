@@ -1,6 +1,6 @@
 {
   "name": "lambda-genbot",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
   "type": "module",
   "description": "Uses generative AI to create image based on given prompt",
