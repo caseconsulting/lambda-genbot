@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Uses generative AI to create image based on given prompt",
   "files": [
+    "constants.js",
     "generate.js",
-    "retrieve.js",
-    "constants.js"
+    "retrieve.js"
   ],
   "repository": "https://github.com/caseconsulting/lambda-genbot",
   "author": "CASE",
