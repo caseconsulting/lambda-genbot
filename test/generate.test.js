@@ -50,7 +50,7 @@ describe('buildPayload', () => {
     assert.deepEqual(payload, {
       prompt: `monster pizza party, ${STYLES[0]} style`,
       aspect_ratio: '1:1',
-      output_format: 'png'
+      output_format: 'jpeg'
     });
   });
 
@@ -81,7 +81,7 @@ describe('invokeModel', () => {
     assert.equal(command.input.contentType, 'application/json');
     const payload = JSON.parse(command.input.body);
     assert.match(payload.prompt, /^monster pizza party, .+ style$/);
-    assert.equal(payload.output_format, 'png');
+    assert.equal(payload.output_format, 'jpeg');
     // Only fields accepted by Bedrock's Stable Image Core
     assert.deepEqual(Object.keys(payload).sort(), ['aspect_ratio', 'output_format', 'prompt']);
   });
@@ -112,10 +112,10 @@ describe('invokeModel', () => {
 });
 
 describe('saveImageToBucket', () => {
-  it('puts the PNG in the images bucket keyed by request ID', async () => {
+  it('puts the cacheable JPEG in the images bucket keyed by request ID', async () => {
     const fileName = await saveImageToBucket(IMAGE_BYTES, 'req-1');
 
-    assert.equal(fileName, 'req-1.png');
+    assert.equal(fileName, 'req-1.jpg');
     assert.equal(s3Send.mock.callCount(), 1);
     const call = s3Send.mock.calls[0];
     assert.equal(await call.this.config.region(), 'us-east-1');
@@ -123,9 +123,10 @@ describe('saveImageToBucket', () => {
     assert.ok(command instanceof PutObjectCommand);
     assert.deepEqual(command.input, {
       Bucket: 'case-consulting-mgmt-genbot-images',
-      Key: 'req-1.png',
+      Key: 'req-1.jpg',
       Body: IMAGE_BYTES,
-      ContentType: 'image/png'
+      ContentType: 'image/jpeg',
+      CacheControl: 'public, max-age=31536000, immutable'
     });
   });
 
@@ -144,7 +145,7 @@ describe('handler', () => {
   it('generates, saves, and returns the retrieve URL for the allowed company', async () => {
     const response = await handler(apiEvent('monster pizza party'), { awsRequestId: 'req-1' });
 
-    assert.deepEqual(response, { statusCode: 200, body: `${RETRIEVE_API}req-1.png` });
+    assert.deepEqual(response, { statusCode: 200, body: `${RETRIEVE_API}req-1.jpg` });
     assert.equal(bedrockSend.mock.callCount(), 1);
     assert.equal(s3Send.mock.callCount(), 1);
   });

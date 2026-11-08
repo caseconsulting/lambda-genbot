@@ -12,6 +12,7 @@ const s3Client = new S3Client({ region: REGION });
 export const MODEL_ID = 'stability.stable-image-core-v1:1';
 
 const BUCKET_NAME = 'case-consulting-mgmt-genbot-images';
+const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 // Bedrock's Stable Image Core rejects the style_preset field, so a random style is appended to the prompt text instead
 export const STYLES = [
@@ -45,7 +46,8 @@ export const buildPayload = (prompt, random = Math.random) => {
   return {
     prompt: `${prompt}, ${style} style`,
     aspect_ratio: '1:1',
-    output_format: 'png'
+    // JPEG is ~6x smaller than PNG (~0.5 MB vs ~3.3 MB at 1536x1536), which speeds up storage, retrieval, and display
+    output_format: 'jpeg'
   };
 };
 
@@ -100,15 +102,16 @@ export const invokeModel = async (prompt) => {
 export const saveImageToBucket = async (imageBuffer, requestId) => {
   try {
     // Create image file name
-    const imageFileName = `${requestId}.png`;
+    const imageFileName = `${requestId}.jpg`;
 
-    // Write image file to bucket
+    // Write image file to bucket; images are never modified, so they can be cached indefinitely
     console.log(`Saving ${imageFileName} image to ${BUCKET_NAME} bucket`);
     const putCommand = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: imageFileName,
       Body: imageBuffer,
-      ContentType: 'image/png'
+      ContentType: 'image/jpeg',
+      CacheControl: IMMUTABLE_CACHE_CONTROL
     });
     await s3Client.send(putCommand);
     console.log(`Saved ${imageFileName} image to ${BUCKET_NAME} bucket`);
