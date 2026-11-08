@@ -4,11 +4,32 @@ This file is an example of a review-and-fix loop with [Claude Code](https://clau
 
 1. **Review:** The `/code-review` skill ran in Claude Code against the stability-core series (`3e35a16..51256d5`, commits dc72223 → 51256d5). That series had already been merged, deployed and verified. The skill reported the 10 findings below, ranked most severe first. Separately, `sam validate --lint` was run and its warnings were added.
 2. **Document:** Claude Code wrote the findings to this file, with a recommended change for each.
-3. **Fix:** Claude Code implemented every recommendation, then updated this file to record what was actually done.
+3. **Fix:** Claude Code implemented every recommendation (commit `91cbeda`), then updated this file to record what was actually done.
+4. **Deploy:** A change-set preview caught one recommendation that would have failed the deploy, and that change was reverted. The rest was deployed and verified live.
 
-**Line numbers:** each _Found at_ reference points to commit `51256d5`, the code that was reviewed. Each _Resolution_ links to the current code.
+**Line numbers:** each _Found at_ reference points to commit `51256d5`, the code that was reviewed. Each _Resolution_ links to the current code, which includes the fixes from `91cbeda`.
 
 Nothing here broke the happy path. The findings are edge-case robustness fixes and cleanups.
+
+## Summary
+
+| #   | Finding                                               | Status                                                                                        |
+| --- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 1   | Bedrock call has no timeout, default retries          | ✅ Implemented                                                                                |
+| 2   | Body parsing outside try/catch                        | ✅ Implemented                                                                                |
+| 3   | Company-ID gate uses loose equality                   | ✅ Implemented                                                                                |
+| 4   | Prompt not validated                                  | ✅ Implemented                                                                                |
+| 5   | Error log drops type and request ID                   | ✅ Implemented                                                                                |
+| 6   | `getContentType` duplicates S3 metadata               | ✅ Implemented                                                                                |
+| 7   | S3 `CacheControl` never used                          | ✅ Implemented (removed from upload)                                                          |
+| 8   | Constants duplicated across handlers                  | ✅ Implemented; bucket-name env var later reverted because it broke `sam local`               |
+| 9   | Bedrock region/model hard-coded in two places         | ✅ Implemented                                                                                |
+| 10  | Tests and docs shipped in Lambda artifacts            | ✅ Implemented, plus a deploy-script fix found while verifying it                             |
+| —   | `sam validate --lint` W3005 warnings (×3)             | ✅ Implemented                                                                                |
+| —   | Redundant `DependsOn` on bucket and Function URL      | ✅ Implemented                                                                                |
+| —   | Log groups created after functions (fresh-stack risk) | ↩️ Tried, reverted after change-set preview; risk accepted                                    |
+| —   | `npm run clean` script (requested during the work)    | ✅ Added; removes `.aws-sam/build` and keeps `build.toml` and any build cache                 |
+| —   | README accuracy (requested during the work)           | ✅ Rewritten for this project; sample event fixed so local invoke passes the company-ID check |
 
 **Verification after the fixes:**
 
@@ -16,7 +37,14 @@ Nothing here broke the happy path. The findings are edge-case robustness fixes a
 - `sam validate --lint`: clean, where it previously failed with 3 warnings.
 - Change-set preview (`--no-execute-changeset`): caught a log-group replacement that would have failed the deploy. That part was reverted; see [`sam validate --lint`](#sam-validate---lint).
 - `sam build`: each function artifact now contains only the runtime files.
-- **Not yet deployed.** The fixes need `npm run deploy` and the same live verification as the original series. See [Deploying these changes](#deploying-these-changes).
+- **Deployed and verified live** on 2026-11-08 (see [Deploying these changes](#deploying-these-changes)):
+  - The `genbot` code size dropped from 10,646,802 to 3,274,497 bytes (−69%).
+  - Basecamp generated a good image.
+  - An older `.png` fetched directly from the retrieve Function URL returned `200`, `Content-Type: image/png` and the immutable `cache-control` header.
+- **Local invoke** (`sam local invoke`, after the `BUCKET_NAME` fix in finding 8):
+  - genbot-retrieve returned an old `.png` from the real bucket.
+  - genbot with the sample event passed the company-ID check (verified with an empty prompt, so Bedrock wasn't called).
+- **Pending deploy:** the `BUCKET_NAME` fix (finding 8) removes an env var from both functions. It is not deployed yet. Until it is, the deployed functions keep the old env var, which holds the same bucket name.
 
 ---
 
@@ -115,7 +143,9 @@ _Found at:_ `generate.js:14-15,166`, `retrieve.js:9-13` (51256d5)
 
 - New [constants.js](constants.js) exports `REGION`, `BUCKET_NAME` and `ERROR_IMAGE_URL`, and both handlers import them ([generate.js:4](generate.js#L4), [retrieve.js:3](retrieve.js#L3)).
 - The fallback reply uses `ERROR_IMAGE_URL` ([generate.js:193](generate.js#L193)).
-- `BUCKET_NAME` is read from an env var set by `!Ref GenBotImagesBucket` ([template.yaml:56](template.yaml#L56), [template.yaml:103](template.yaml#L103)). The template is now the single source of truth for the bucket name. The literal default is kept only for local runs and tests.
+- `BUCKET_NAME` is a literal in [constants.js:8](constants.js#L8), and must match `BucketName` in the template.
+
+**Follow-up found while checking the README:** the first version of this fix passed `BUCKET_NAME` to both functions as an env var set by `!Ref GenBotImagesBucket`, so the template would be the single source of truth. That works when deployed, but `sam local` resolves `!Ref` of a resource to its logical ID. Locally, both functions tried to use a bucket named `GenBotImagesBucket`. A local invoke of genbot-retrieve failed with `NoSuchBucket` and redirected to the error image. The env var was removed and the name is a literal again. The template and the code each hold one copy of the name, as at 51256d5, while the duplication between the two JS files is still gone. The bucket policies still reference the bucket resource; see [`sam validate --lint`](#sam-validate---lint).
 
 ---
 
@@ -128,8 +158,8 @@ The IAM resource ARN and the code each named the model and region separately. Sw
 **Resolution:**
 
 - [template.yaml:22-30](template.yaml#L22-L30): new `BedrockRegion` and `BedrockModelId` parameters (defaults `us-west-2` / `stability.stable-image-core-v1:1`).
-- [template.yaml:68](template.yaml#L68): they build the IAM ARN with `!Sub`.
-- [template.yaml:57-58](template.yaml#L57-L58): they are passed to the function as `bedrockRegion` / `modelId`.
+- [template.yaml:67](template.yaml#L67): they build the IAM ARN with `!Sub`.
+- [template.yaml:56-57](template.yaml#L56-L57): they are passed to the function as `bedrockRegion` / `modelId`.
 - [generate.js:9-10](generate.js#L9-L10): the code reads them from those env vars, with the same defaults for local runs and tests.
 
 To switch models, change one parameter, for example with `--parameter-overrides BedrockModelId=...`.
@@ -146,7 +176,7 @@ _Found at:_ `template.yaml:42,92` (51256d5)
 
 **Follow-up found before deploying:** the deployed package was worse than the review assumed. The `deploy` script passed `--template-file template.yaml`, so `sam deploy` zipped the project folder directly and never used the `.aws-sam/build` output. The live `genbot` package (10.6 MB) contained `.git/`, dotfiles, `test/`, `PLAN.md`, and a stale copy of `.aws-sam/` (~7,200 files), alongside `node_modules`. The `files` allow-list alone would not have changed that.
 
-[package.json:16](package.json#L16) drops `--template-file template.yaml`. With no template file given, `sam deploy` uses the built template in `.aws-sam/build/`, so the allow-list now applies to what is deployed. The `.git/config` that was shipped contains only the SSH remote URL, with no credentials.
+[package.json:17](package.json#L17) drops `--template-file template.yaml`. With no template file given, `sam deploy` uses the built template in `.aws-sam/build/`, so the allow-list now applies to what is deployed. The `.git/config` that was shipped contains only the SSH remote URL, with no credentials.
 
 ---
 
@@ -174,8 +204,8 @@ The review also flagged three related `DependsOn` problems that lint did not cat
 
 **Resolution:** all `DependsOn` blocks are gone from [template.yaml](template.yaml), and `sam validate --lint` reports `valid SAM Template`.
 
-- **Bucket policies:** they reference the bucket resource (`!GetAtt GenBotImagesBucket.Arn`, [template.yaml:74](template.yaml#L74), [:114-115](template.yaml#L114-L115)), which creates the dependency implicitly. They keep the explicit least-privilege statements rather than switching to the broader SAM `S3WritePolicy`/`S3ReadPolicy` templates.
-- **Log groups: tried, then reverted.** The first fix gave each log group a literal name (`/aws/lambda/genbot`, etc.) and pointed each function at it with `LoggingConfig`, so the group would be created first. The change-set preview marked all three log groups `Replacement: True`. Its details showed `RequiresRecreation: Always`, `Evaluation: Static` on `LogGroupName`, because CloudFormation compares template values as written: `!Sub /aws/lambda/${GenBotFunction}` → `/aws/lambda/genbot` counts as a rename, even though both resolve to the same string. CloudFormation can't replace a custom-named resource in place, so the deploy would have failed and rolled back. The log groups keep their original `!Sub` names ([template.yaml:84](template.yaml#L84), [:89](template.yaml#L89), [:119](template.yaml#L119)), with only the redundant `DependsOn` removed. The creation-order risk applies only to a brand-new stack and is accepted. Fixing it on this stack would mean retaining the log groups, removing them from the stack and re-importing them.
+- **Bucket policies:** they reference the bucket resource (`!GetAtt GenBotImagesBucket.Arn`, [template.yaml:73](template.yaml#L73), [:110-111](template.yaml#L110-L111)), which creates the dependency implicitly. They keep the explicit least-privilege statements rather than switching to the broader SAM `S3WritePolicy`/`S3ReadPolicy` templates.
+- **Log groups: tried, then reverted.** The first fix gave each log group a literal name (`/aws/lambda/genbot`, etc.) and pointed each function at it with `LoggingConfig`, so the group would be created first. The change-set preview marked all three log groups `Replacement: True`. Its details showed `RequiresRecreation: Always`, `Evaluation: Static` on `LogGroupName`, because CloudFormation compares template values as written: `!Sub /aws/lambda/${GenBotFunction}` → `/aws/lambda/genbot` counts as a rename, even though both resolve to the same string. CloudFormation can't replace a custom-named resource in place, so the deploy would have failed and rolled back. The log groups keep their original `!Sub` names ([template.yaml:83](template.yaml#L83), [:88](template.yaml#L88), [:115](template.yaml#L115)), with only the redundant `DependsOn` removed. The creation-order risk applies only to a brand-new stack and is accepted. Fixing it on this stack would mean retaining the log groups, removing them from the stack and re-importing them.
 
 ---
 
@@ -184,17 +214,59 @@ The review also flagged three related `DependsOn` problems that lint did not cat
 Always review the change set before executing it. That is how the log group replacement described above was caught:
 
 ```sh
-npm run build && sam deploy --region us-east-1 --capabilities CAPABILITY_IAM --s3-prefix lambda-genbot \
-  --s3-bucket case-consulting-mgmt-sam-deployments --stack-name lambda-genbot --profile mgmt --no-execute-changeset
+npm run deploy -- --no-execute-changeset
 ```
 
-These are the same flags as `npm run deploy`, plus `--no-execute-changeset`.
+npm appends the extra flag to the `sam deploy` command in the script.
 
 In the change set, check:
 
 - No resource shows `Replacement: True`, and the log groups are not in the change set at all. Use `aws cloudformation describe-change-set` to see the per-property reason for any change.
-- `GenBotFunction` shows new env vars (`BUCKET_NAME`, `bedrockRegion`, `modelId`).
+- The first deploy showed new env vars on `GenBotFunction` (`BUCKET_NAME`, `bedrockRegion`, `modelId`). The pending `BUCKET_NAME` fix should show only the two functions changing (env var removed, new code).
 
 After deploying, confirm that the code size reported by `aws lambda get-function --function-name genbot` has dropped from about 10.6 MB.
 
 Then repeat the live checks from PLAN.md: generate an image from Basecamp, and confirm the retrieve URL serves both a new JPEG and an older PNG with the correct content type.
+
+Test old images against the retrieve Function URL directly. Opening an old image in Basecamp does not test `genbot-retrieve`. Basecamp serves its own stored copy (a `storage.basecamp.com/bc4-production-blob-previews/...` URL), so the request never reaches the Function URL. For example:
+
+```sh
+curl -s -o /dev/null -D - "<GenBotRetrieveApi output><old-key>.png" | grep -i -E "^HTTP|content-type|cache-control"
+```
+
+After deploying, run `npm run clean` to remove the `.aws-sam/build` output.
+
+---
+
+## Final analysis
+
+**Outcome.** Every review finding and lint warning was addressed. Two recommendations were partly reverted: the log-group rename, and the bucket-name env var. The result was deployed on 2026-11-08 and verified live:
+
+| Check                       | Before (51256d5)                     | After                                    |
+| --------------------------- | ------------------------------------ | ---------------------------------------- |
+| Unit tests                  | 23 passing                           | 31 passing                               |
+| `sam validate --lint`       | Failed, 3 × W3005                    | Clean                                    |
+| `genbot` deployed code size | 10,646,802 bytes                     | 3,274,497 bytes (−69%)                   |
+| Deployed package contents   | `.git/`, `.aws-sam/`, tests, docs    | Handlers, `constants.js`, `node_modules` |
+| Final change set            | —                                    | 5 modifications, no replacements         |
+| Basecamp generation         | Working                              | Working                                  |
+| Old PNG via retrieve URL    | Served as `image/png` (by extension) | Served as `image/png` (from S3 metadata) |
+
+**What the review got right.** Findings 1–9 were accurate and fixed as recommended. None of them was causing a visible failure, which matches the review's own assessment that the happy path was sound. Their value is in failure modes that hadn't happened yet: a timeout that would hide the fallback reply, an access check that could pass with `null`, and logs that couldn't tell throttling from access-denied errors.
+
+**What the review missed or got wrong.** Verifying the fixes against AWS mattered more than any single finding.
+
+1. **Finding 10 understated the packaging problem.** The review looked at the `sam build` output, but the `deploy` script never used it. Downloading the live package showed that `.git/` and a stale `.aws-sam/` (~7,200 files) were being shipped. This was found by inspecting what was actually deployed, not the local build.
+2. **One recommendation would have failed the deploy.** Renaming the log groups to literals assumed CloudFormation compares resolved values. It compares template values, so the change set showed three replacements of fixed-name resources. Previewing with `--no-execute-changeset` and reading `describe-change-set` caught it before anything ran.
+3. **The obvious manual test didn't test the change.** Opening an old image in Basecamp returns Basecamp's own stored copy, so `genbot-retrieve` was verified with a direct request to the Function URL instead.
+4. **One fix broke local runs, and deployed checks couldn't catch it.** Passing the bucket name as `!Ref GenBotImagesBucket` (finding 8) worked in AWS. Under `sam local`, though, it resolved to the logical ID `GenBotImagesBucket`. Unit tests use the literal default, and the live checks ran against the deployed stack, so neither caught it. It turned up while checking the README's local-run instructions and was confirmed with `sam local invoke`. The same check showed that the sample event's `<companyId>` placeholder could never pass locally: `sam local` doesn't resolve `{{resolve:ssm:...}}`, so the company ID is that literal string. The sample event now sends the literal.
+
+**Remaining risks and open items.**
+
+- **`BUCKET_NAME` fix not yet deployed:** see Verification above. Deploying it is not urgent, because the deployed env var holds the same value.
+
+- **Log group creation order:** on a brand-new stack, a function could create its log group before CloudFormation does. This is accepted; it doesn't affect the existing stack.
+- **Timeout path not exercised live:** the Bedrock timeout and retry limits (finding 1) are covered by unit tests only. They will first run for real on a slow or throttled request.
+- **Content-filter path:** PLAN.md open item #2 (verifying the content-filter path live) is not resolved here. The fuller error logging from finding 5 should make that check easier.
+- **Basecamp copies and the 183-day bucket expiry:** Basecamp appears to keep its own copy of each image. If so, old chat images may keep displaying after the S3 lifecycle rule deletes the original. This is based on one image link and is unconfirmed.
+- **Lint and formatting tools:** ESLint and Prettier aren't installed in the project. Only the 120-character line limit was checked by hand.

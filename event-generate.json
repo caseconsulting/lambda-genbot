@@ -26,7 +26,7 @@
     "time": "12/Mar/2020:19:03:58 +0000",
     "timeEpoch": 1583348638390
   },
-  "body": "{ \"command\": \"monster pizza party\", \"creator\": { \"company\": { \"id\": \"<companyId>\" } } }",
+  "body": "{ \"command\": \"monster pizza party\", \"creator\": { \"company\": { \"id\": \"{{resolve:ssm:/Basecamp/CompanyID:1}}\" } } }",
   "pathParameters": {},
   "isBase64Encoded": false,
   "stageVariables": {}

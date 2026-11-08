@@ -53,7 +53,6 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
-          BUCKET_NAME: !Ref GenBotImagesBucket
           bedrockRegion: !Ref BedrockRegion
           modelId: !Ref BedrockModelId
           companyId: '{{resolve:ssm:/Basecamp/CompanyID:1}}'
@@ -98,9 +97,6 @@ Resources:
       Timeout: 5
       # More memory = more CPU/network for reading and Base64-encoding the image (on the critical path for Basecamp)
       MemorySize: 512
-      Environment:
-        Variables:
-          BUCKET_NAME: !Ref GenBotImagesBucket
       FunctionUrlConfig:
         AuthType: NONE
       Policies:

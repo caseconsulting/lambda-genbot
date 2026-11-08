@@ -1,17 +1,40 @@
 # lambda-genbot
 
-This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
+GenBot is a Basecamp chatbot that generates an image from a text prompt.
 
-- generate.js - Code for the GenBot Lambda function. Generates images from text with the Amazon Bedrock Stability AI Stable Image Core model (us-west-2).
-- event-generate.json - Sample event that you can use to invoke the GenBot function.
-- retrieve.js - Code for the GenBot Retrieve Lambda function.
-- event-retrieve.json - Sample event that you can use to invoke the GenBot Retrieve function.
+1. A Basecamp chat command sends the prompt to the **genbot** function through an API Gateway HTTP API (`POST /`).
+2. **genbot** checks that the request comes from the CASE Basecamp account, adds a random style to the prompt, and generates a JPEG with the Amazon Bedrock Stability AI Stable Image Core model (in us-west-2).
+3. **genbot** saves the image to an S3 bucket (in us-east-1) and replies to Basecamp with a link to the **genbot-retrieve** function.
+4. **genbot-retrieve** (a Lambda Function URL) reads the image from S3 and returns it with long-lived cache headers. Older images in the bucket are PNG; newer ones are JPEG.
+
+Images in the bucket expire after about 6 months. Basecamp serves old chat images from its own stored copy, so opening an image in Basecamp doesn't call **genbot-retrieve**.
+
+The project is built and deployed with the AWS SAM CLI.
+
+## Files
+
+- generate.js - Code for the genbot function.
+- retrieve.js - Code for the genbot-retrieve function.
 - constants.js - Constants shared by both functions (region, bucket name, error image).
-- package.json - Dependencies, scripts, and the `files` list that limits what is packaged into each function.
-- test/ - Unit tests, run with `npm test`.
-- template.yaml - A template that defines the AWS resources for the GenBot and GenBot Retrieve functions.
+- template.yaml - SAM template that defines the AWS resources: both Lambda functions and their IAM roles, the HTTP API, the Function URL, the S3 images bucket, and CloudWatch log groups.
+- package.json - Dependencies, npm scripts, and the `files` list that limits what is packaged into each function.
+- event-generate.json - Sample event for invoking genbot locally.
+- event-retrieve.json - Sample event for invoking genbot-retrieve locally.
+- test/ - Unit tests.
+- PLAN.md - Design notes and measurements from the move to Stable Image Core.
+- FEEDBACK.md - Code review findings and how each was resolved.
 
-The application uses several AWS resources, including Lambda functions and IAM Roles. These resources are defined in the `template.yaml` file in this project. You can update the templates to add AWS resources through the same deployment process that updates your application code.
+## Prerequisites
+
+- [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html), configured for SSO (see below).
+- [SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html).
+- [Node.js](https://nodejs.org/en/) 24, matching the Lambda runtime.
+- [Docker](https://docs.docker.com/get-docker/), only for running functions locally with `sam local`. Building, testing, and deploying don't need it.
+
+The deployed stack also relies on:
+
+- **Bedrock model access** to Stable Image Core in us-west-2.
+- **SSM parameter `/Basecamp/CompanyID`**, the Basecamp company ID for which genbot accepts requests.
 
 ## AWS SSO Configuration
 
@@ -21,39 +44,24 @@ If AWS SSO has not yet been configured, follow instructions in https://github.co
 
 ### AWS SSO Login
 
-To explicitly obtain AWS credentials from AWS SSO, run `aws sso login --profile mgmt`.
+To obtain AWS credentials from AWS SSO, run `npm run login` (or `aws sso login --profile mgmt`).
 Your web browser should open a new tab, where you should be required to login to Google with your **@consultwithcase.com**
 email address (unless you recently did so) and then press the _Allow_ button to explicitly permit the authorize request.
 
 To remove AWS credentials, run `aws sso logout --profile mgmt`. This will also clear any authorization.
 Therefore, a subsequent login will launch the web browser again for a new authorization request.
 
-## Deploy the sample application
+## npm scripts
 
-The Serverless Application Model Command Line Interface (SAM CLI) is an extension of the AWS CLI that adds functionality for building and testing Lambda applications. It uses Docker to run your functions in an Amazon Linux environment that matches Lambda. It can also emulate your application's build environment and API.
-
-To use the SAM CLI, you need the following tools.
-
-- SAM CLI - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
-- Node.js - [Install Node.js](https://nodejs.org/en/), including the NPM package management tool.
-- Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community)
-
-To build and deploy your application for the first time, run the following in your shell:
-
-```bash
-sam build
-sam deploy --guided
-```
-
-The first command will build the source of your application. The second command will package and deploy your application to AWS, with a series of prompts:
-
-- **Stack Name**: The name of the stack to deploy to CloudFormation. This should be unique to your account and region, and a good starting point would be something matching your project name.
-- **AWS Region**: The AWS region you want to deploy your app to.
-- **Confirm changes before deploy**: If set to yes, any change sets will be shown to you before execution for manual review. If set to no, the AWS SAM CLI will automatically deploy application changes.
-- **Allow SAM CLI IAM role creation**: Many AWS SAM templates, including this example, create AWS IAM roles required for the AWS Lambda function(s) included to access AWS services. By default, these are scoped down to minimum required permissions. To deploy an AWS CloudFormation stack which creates or modified IAM roles, the `CAPABILITY_IAM` value for `capabilities` must be provided. If permission isn't provided through this prompt, to deploy this example you must explicitly pass `--capabilities CAPABILITY_IAM` to the `sam deploy` command.
-- **Save arguments to samconfig.toml**: If set to yes, your choices will be saved to a configuration file inside the project, so that in the future you can just re-run `sam deploy` without parameters to deploy changes to your application.
-
-You can find your API Gateway Endpoint URL in the output values displayed after deployment.
+| Script                   | What it does                                                                            |
+| ------------------------ | --------------------------------------------------------------------------------------- |
+| `npm test`               | Runs the unit tests.                                                                    |
+| `npm run login`          | Signs in to AWS SSO with the `mgmt` profile.                                            |
+| `npm run build`          | Runs `sam build`, writing the deployment packages to `.aws-sam/build`.                  |
+| `npm run deploy`         | Builds, then deploys the `lambda-genbot` stack to us-east-1.                            |
+| `npm run local:generate` | Builds, then invokes genbot locally with `event-generate.json` (needs Docker).          |
+| `npm run local:retrieve` | Builds, then invokes genbot-retrieve locally with `event-retrieve.json` (needs Docker). |
+| `npm run clean`          | Removes `.aws-sam/build`. Keeps `.aws-sam/build.toml` and any `--cached` build cache.   |
 
 ## Unit tests
 
@@ -63,72 +71,67 @@ Unit tests use the built-in Node.js test runner (`node:test`) and mock all AWS c
 npm test
 ```
 
-## Use the SAM CLI to build and test locally
+## Deploy
 
-Build your application with the `sam build` command.
+Deploy with `npm run deploy`. It runs `sam build`, then `sam deploy` with this project's fixed settings (stack `lambda-genbot`, region us-east-1, the `case-consulting-mgmt-sam-deployments` artifact bucket, and the `mgmt` profile). The project has no `samconfig.toml`, so don't use `sam deploy --guided`.
 
-```bash
-sam build
-```
-
-The SAM CLI installs dependencies defined in `package.json`, creates a deployment package, and saves it in the `.aws-sam/build` folder.
-
-When you no longer need the build output (after deploying or local testing), remove it with `npm run clean`. This keeps `.aws-sam/build.toml` (and any `--cached` build cache), which SAM reuses between builds.
-
-Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source.
-
-Run functions locally and invoke them with the `sam local invoke` command.
+Preview the change set first. This builds and creates a change set without executing it:
 
 ```bash
-sam local invoke GenBotFunction -e event-generate.json --profile mgmt
-sam local invoke GenBotRetrieveFunction -e event-retrieve.json --profile mgmt
+npm run deploy -- --no-execute-changeset
 ```
 
-The SAM CLI can also emulate your application's API. Use the `sam local start-api` to run the API locally on port 3000.
+In the change set, check that no resource shows `Replacement: True`. Several resources have fixed names (the bucket, functions, and log groups), so CloudFormation can't replace them in place. Run `aws cloudformation describe-change-set` to see why each property is changing. If the change set looks right, run `npm run deploy`.
+
+To use a different Bedrock model or region, override the template parameters. The function's IAM policy and environment variables both follow these values:
 
 ```bash
-sam local start-api
-curl http://localhost:3000/
+npm run deploy -- --parameter-overrides BedrockModelId=<model-id> BedrockRegion=<region>
 ```
 
-The SAM CLI reads the application template to determine the API's routes and the functions that they invoke. The `Events` property on each function's definition includes the route and method for each path.
+After deploying, the output lists the HTTP API endpoint (`GenBotApi`) and the retrieve Function URL (`GenBotRetrieveApi`). Run `npm run clean` to remove the build output.
 
-```yaml
-Events:
-  GenBot:
-    Type: HttpApi
-    Properties:
-      Path: /
-      Method: post
+## Run functions locally
+
+`sam local invoke` runs a function in a Docker container that matches the Lambda runtime. It uses your `mgmt` credentials, so the functions call the real AWS services.
+
+```bash
+npm run local:generate
+npm run local:retrieve
 ```
 
-## Add a resource to your application
+- **genbot** calls Bedrock and writes the image to the production bucket, so each successful local run costs the same as a real request. `sam local` can't resolve `{{resolve:ssm:...}}` references, so the company ID is the literal string `{{resolve:ssm:/Basecamp/CompanyID:1}}`. `event-generate.json` sends that same string so the company-ID check passes. In the deployed function the reference resolves to the real ID, so this string is rejected there. The retrieve link in the reply comes from the Function URL attribute, which `sam local` also can't resolve, so don't expect it to work.
+- **genbot-retrieve** reads from the production bucket. `event-retrieve.json` requests `/abc.png`, which doesn't exist, so the function redirects to the error image. To retrieve a real image, copy the event and change `rawPath` and `requestContext.http.path` to an existing key.
 
-The application template uses AWS Serverless Application Model (AWS SAM) to define application resources. AWS SAM is an extension of AWS CloudFormation with a simpler syntax for configuring common serverless application resources such as functions, triggers, and APIs. For resources not included in [the SAM specification](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-resources-and-properties.html), you can use standard [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html) resource types.
+You can also emulate the HTTP API on port 3000 with `sam local start-api`. The only route is `POST /`:
+
+```bash
+sam local start-api --profile mgmt
+curl -X POST http://localhost:3000/ \
+  -d '{"command": "monster pizza party", "creator": {"company": {"id": "{{resolve:ssm:/Basecamp/CompanyID:1}}"}}}'
+```
 
 ## Fetch, tail, and filter Lambda function logs
 
-To simplify troubleshooting, SAM CLI has a command called `sam logs`. `sam logs` lets you fetch logs generated by your deployed Lambda function from the command line. In addition to printing the logs on the terminal, this command has several nifty features to help you quickly find the bug.
-
-`NOTE`: This command works for all AWS Lambda functions; not just the ones you deploy using SAM.
+`sam logs` fetches logs from the deployed functions:
 
 ```bash
 sam logs -n GenBotFunction --stack-name lambda-genbot --tail --profile mgmt
 sam logs -n GenBotRetrieveFunction --stack-name lambda-genbot --tail --profile mgmt
 ```
 
-You can find more information and examples about filtering Lambda function logs in the [SAM Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
+See the [SAM documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html) for filtering options.
 
-## Cleanup
+## Delete the stack
 
-To delete the application, use the AWS CLI and run the following:
+CloudFormation can't delete a bucket that still contains objects. Empty the images bucket first. This permanently deletes every generated image.
 
 ```bash
+aws s3 rm s3://case-consulting-mgmt-genbot-images --recursive --profile mgmt
 aws cloudformation delete-stack --stack-name lambda-genbot --profile mgmt
 ```
 
 ## Resources
 
-See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) for an introduction to SAM specification, the SAM CLI, and serverless application concepts.
-
-Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
+- [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html)
+- [Stable Image Core on Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-stability-ai-stable-image-core-1-0.html)
