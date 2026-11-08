@@ -1,107 +1,93 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { PutObjectCommand, S3Client, S3ServiceException } from '@aws-sdk/client-s3';
 import { fromBase64 } from '@smithy/util-base64';
-import { readFile } from 'node:fs/promises';
 
-// Create Amazon Bedrock Runtime and S3 clients
+// Lambda and S3 bucket live in us-east-1.
+// Stable Image Core is only offered in-region in us-west-2 (no cross-region inference profile), so Bedrock is called there.
 const REGION = 'us-east-1';
-const config = { region: REGION };
-const bedrockClient = new BedrockRuntimeClient(config);
-const s3Client = new S3Client(config);
+const BEDROCK_REGION = 'us-west-2';
+const bedrockClient = new BedrockRuntimeClient({ region: BEDROCK_REGION });
+const s3Client = new S3Client({ region: REGION });
+
+export const MODEL_ID = 'stability.stable-image-core-v1:1';
 
 const BUCKET_NAME = 'case-consulting-mgmt-genbot-images';
 
-const SYSTEM_PROMPT = 'Generate a new 320px by 320px image that most closely responds to the following prompt:';
-
-const STYLE_PRESETS = [
-  '3d-model',
-  'analog-film',
+// Bedrock's Stable Image Core rejects the style_preset field, so a random style is appended to the prompt text instead
+export const STYLES = [
+  '3d model',
+  'analog film',
   'anime',
   'cinematic',
-  'comic-book',
-  'digital-art',
-  'enhance',
-  'fantasy-art',
+  'comic book',
+  'digital art',
+  'fantasy art',
   'isometric',
-  'line-art',
-  'low-poly',
-  'modeling-compound',
-  'neon-punk',
+  'line art',
+  'low poly',
+  'modeling compound',
+  'neon punk',
   'origami',
   'photographic',
-  'pixel-art',
-  'tile-texture'
+  'pixel art',
+  'tile texture'
 ];
 
 /**
- * Converts image to Base64-encoded bytes.
+ * Builds the Stable Image Core text-to-image request payload, adding a random style to the prompt.
  *
- * @param {string} path - The image path.
- * @returns {string} The Base-64 encoded image bytes.
+ * @param {string} prompt - The input text prompt for the model.
+ * @param {function(): number} [random=Math.random] - Random number generator returning [0, 1).
+ * @returns {Object} The request payload.
  */
-export const imageToBase64 = async (path) => {
-  try {
-    const buffer = await readFile(path);
-    return buffer.toString('base64');
-  } catch (error) {
-    console.error('Error reading image:', error);
-    throw error;
-  }
+export const buildPayload = (prompt, random = Math.random) => {
+  const style = STYLES[Math.floor(random() * STYLES.length)];
+  return {
+    prompt: `${prompt}, ${style} style`,
+    aspect_ratio: '1:1',
+    output_format: 'png'
+  };
 };
 
 /**
  * Invokes Amazon Bedrock model to convert prompt text to image.
- * Uses Stability AI Stable Image Style Guide model to generate new image based on prompt text, source image (CASE logo),
- * and random style preset.
+ * Uses Stability AI Stable Image Core text-to-image model with a random style added to the prompt.
  *
- * NOTE: Previously used Amazon Nova Canvas model, but it was retired as legacy and could no longer be called.
+ * NOTE: Previously used Amazon Nova Canvas (end of life 2026-09-30), then Stable Image Style Guide,
+ * which required a starter image (CASE logo).
  *
- * @see {@link https://docs.aws.amazon.com/bedrock/latest/userguide/stable-image-services.html}
- * @see {@link https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-stability-ai-stable-image-style-guide.html}
+ * @see {@link https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-stability-ai-stable-image-core-1-0.html}
+ * @see {@link https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-diffusion-stable-image-core-text-image-request-response.html}
  *
  * @param {string} prompt - The input text prompt for the model.
  * @returns {Uint8Array} The image bytes.
  */
 export const invokeModel = async (prompt) => {
-  try {
-    // Prepare the payload
-    console.log(`Preparing payload for text prompt: ${prompt}`);
-    const randomNumber = Math.floor(Math.random() * STYLE_PRESETS.length);
-    const image = await imageToBase64('./case-logo.png');
-    const payload = {
-      image,
-      prompt: `${SYSTEM_PROMPT} ${prompt}`,
-      output_format: 'png',
-      style_preset: STYLE_PRESETS[randomNumber]
-    };
+  // Prepare the payload
+  const payload = buildPayload(prompt);
+  console.log(`Prepared payload for text prompt: ${payload.prompt}`);
 
-    // Invoke the model with the payload and wait for the response
-    const modelId = `arn:aws:bedrock:${REGION}:${process.env.accountId}:inference-profile/us.stability.stable-image-style-guide-v1:0`;
-    console.log(`Generating image with Bedrock model ${modelId}`);
-    const params = {
-      modelId,
-      accept: 'application/json',
-      contentType: 'application/json',
-      body: JSON.stringify(payload)
-    };
-    const command = new InvokeModelCommand(params);
-    const response = await bedrockClient.send(command);
+  // Invoke the model with the payload and wait for the response
+  console.log(`Generating image with Bedrock model ${MODEL_ID} in ${BEDROCK_REGION}`);
+  const command = new InvokeModelCommand({
+    modelId: MODEL_ID,
+    accept: 'application/json',
+    contentType: 'application/json',
+    body: JSON.stringify(payload)
+  });
+  const response = await bedrockClient.send(command);
 
-    // Decode response and return image
-    const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-    const base64Image = responseBody.images[0];
-    const imageBuffer = fromBase64(base64Image);
-
-    const finishReason = responseBody.error;
-    if (finishReason) {
-      throw new Error(`Model invocation error. Error is: ${finishReason}`);
-    }
-
-    console.log(`Successfully generated image. Image size: ${imageBuffer.length} bytes`);
-    return imageBuffer;
-  } catch (error) {
-    throw error;
+  // Decode response, check for filtered or failed generation, and return image
+  const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+  const finishReason = responseBody.finish_reasons?.[0] ?? responseBody.error;
+  const base64Image = responseBody.images?.[0];
+  if (finishReason || !base64Image) {
+    throw new Error(`Model invocation error. Reason: ${finishReason ?? 'no image returned'}`);
   }
+  const imageBuffer = fromBase64(base64Image);
+
+  console.log(`Successfully generated image. Image size: ${imageBuffer.length} bytes`);
+  return imageBuffer;
 };
 
 /**
@@ -124,7 +110,7 @@ export const saveImageToBucket = async (imageBuffer, requestId) => {
       Body: imageBuffer,
       ContentType: 'image/png'
     });
-    const response = await s3Client.send(putCommand);
+    await s3Client.send(putCommand);
     console.log(`Saved ${imageFileName} image to ${BUCKET_NAME} bucket`);
 
     // Return image file name

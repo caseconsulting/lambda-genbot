@@ -2,10 +2,11 @@
 
 This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
 
-- generate.js - Code for the GenBot Lambda function.
+- generate.js - Code for the GenBot Lambda function. Generates images from text with the Amazon Bedrock Stability AI Stable Image Core model (us-west-2).
 - event-generate.json - Sample event that you can use to invoke the GenBot function.
 - retrieve.js - Code for the GenBot Retrieve Lambda function.
 - event-retrieve.json - Sample event that you can use to invoke the GenBot Retrieve function.
+- test/ - Unit tests, run with `npm test`.
 - template.yaml - A template that defines the AWS resources for the GenBot and GenBot Retrieve functions.
 
 The application uses several AWS resources, including Lambda functions and IAM Roles. These resources are defined in the `template.yaml` file in this project. You can update the templates to add AWS resources through the same deployment process that updates your application code.
@@ -51,6 +52,14 @@ The first command will build the source of your application. The second command 
 - **Save arguments to samconfig.toml**: If set to yes, your choices will be saved to a configuration file inside the project, so that in the future you can just re-run `sam deploy` without parameters to deploy changes to your application.
 
 You can find your API Gateway Endpoint URL in the output values displayed after deployment.
+
+## Unit tests
+
+Unit tests use the built-in Node.js test runner (`node:test`) and mock all AWS calls, so no credentials are needed.
+
+```bash
+npm test
+```
 
 ## Use the SAM CLI to build and test locally
 

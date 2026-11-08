@@ -1,6 +1,6 @@
 {
   "name": "lambda-genbot",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
   "description": "Uses generative AI to create image based on given prompt",
@@ -11,7 +11,8 @@
     "deploy": "npm run build && sam deploy --template-file template.yaml --region us-east-1 --capabilities CAPABILITY_IAM --s3-prefix lambda-genbot --s3-bucket case-consulting-mgmt-sam-deployments --stack-name lambda-genbot --profile mgmt",
     "local:generate": "npm run build && sam local invoke GenBotFunction -e event-generate.json --profile mgmt",
     "local:retrieve": "npm run build && sam local invoke GenBotRetrieveFunction -e event-retrieve.json --profile mgmt",
-    "login": "aws sso login --profile mgmt"
+    "login": "aws sso login --profile mgmt",
+    "test": "node --test"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "3.1164.0",

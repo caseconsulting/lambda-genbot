@@ -46,7 +46,6 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
-          accountId: !Ref AWS::AccountId
           companyId: '{{resolve:ssm:/Basecamp/CompanyID:1}}'
           retrieveApi: !GetAtt GenBotRetrieveFunctionUrl.FunctionUrl
       Policies:
@@ -56,8 +55,8 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource:
-                - !Sub arn:aws:bedrock:*::foundation-model/stability.stable-image-style-guide-v1:0
-                - !Sub arn:aws:bedrock:${AWS::Region}:*:inference-profile/us.stability.stable-image-style-guide-v1:0
+                # Stable Image Core is only available in-region in us-west-2 (no cross-region inference profile)
+                - arn:aws:bedrock:us-west-2::foundation-model/stability.stable-image-core-v1:1
         - Statement:
             - Sid: AllowImageBucketObjectPut
               Effect: Allow
