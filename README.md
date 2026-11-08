@@ -103,12 +103,26 @@ npm run local:retrieve
 - **genbot** calls Bedrock and writes the image to the production bucket, so each successful local run costs the same as a real request. `sam local` can't resolve `{{resolve:ssm:...}}` references, so the company ID is the literal string `{{resolve:ssm:/Basecamp/CompanyID:1}}`. `event-generate.json` sends that same string so the company-ID check passes. In the deployed function the reference resolves to the real ID, so this string is rejected there. The retrieve link in the reply comes from the Function URL attribute, which `sam local` also can't resolve, so don't expect it to work.
 - **genbot-retrieve** reads from the production bucket. `event-retrieve.json` requests `/abc.png`, which doesn't exist, so the function redirects to the error image. To retrieve a real image, copy the event and change `rawPath` and `requestContext.http.path` to an existing key.
 
-You can also emulate the HTTP API on port 3000 with `sam local start-api`. The only route is `POST /`:
+You can also emulate the HTTP API on port 3000 with `sam local start-api`. The only route is `POST /`. Start the API in one terminal:
 
 ```bash
 sam local start-api --profile mgmt
-curl -X POST http://localhost:3000/ \
-  -d '{"command": "monster pizza party", "creator": {"company": {"id": "{{resolve:ssm:/Basecamp/CompanyID:1}}"}}}'
+```
+
+In a second terminal, generate an image. The reply is plain text ending in the image file name (`<request-id>.jpg`). The reply's retrieve link doesn't resolve locally, and `start-api` doesn't emulate the Function URL, so get the image from the deployed genbot-retrieve function instead. This step needs [jq](https://jqlang.org/).
+
+```bash
+RESPONSE=$(curl -s -X POST http://localhost:3000/ \
+  -d '{"command": "monster pizza party", "creator": {"company": {"id": "{{resolve:ssm:/Basecamp/CompanyID:1}}"}}}')
+echo "$RESPONSE"
+
+# Extract the image file name; empty if generation failed
+IMAGE=$(printf '%s' "$RESPONSE" | jq -Rr 'capture("(?<name>[0-9a-f-]{36}\\.jpg)$").name')
+
+# Download the image from the deployed genbot-retrieve function
+RETRIEVE_URL=$(aws cloudformation describe-stacks --stack-name lambda-genbot --region us-east-1 --profile mgmt \
+  --query "Stacks[0].Outputs[?OutputKey=='GenBotRetrieveApi'].OutputValue" --output text)
+[ -n "$IMAGE" ] && curl -s -o "$IMAGE" "$RETRIEVE_URL$IMAGE" && open "$IMAGE"   # open is macOS; use xdg-open on Linux
 ```
 
 ## Fetch, tail, and filter Lambda function logs
